@@ -1,0 +1,117 @@
+version: "3"
+services:
+  master_rabbitmq_node:
+    image: gjhong1129/examples:rmq_amd64_v0.0.4
+    container_name: master_rmq_node_v0.0.3
+    hostname: master_rmq_node
+    command: rabbitmq-server
+    restart: always
+    networks:
+      - chat_server_network
+    # ports:
+    #   - "15671:15671"
+    #   - "15676:15676"
+    volumes:
+      - ./volume/master_rmq_node/data/:/var/lib/rabbitmq/mnesia
+      - ./volume/master_rmq_node/log/:/var/log/rabbitmq/
+      - /usr/bin/qemu-arm-static:/usr/bin/qemu-arm-static
+    environment:
+      - RABBITMQ_ERLANG_COOKIE=${RABBITMQ_ERLANG_COOKIE}
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+    healthcheck:
+      test: [ "CMD", "nc", "-z", "localhost", "5671" ]
+      interval: 5s
+      timeout: 15s
+      retries: 1
+
+  slave_rabbitmq_node_1:
+    image: gjhong1129/examples:rmq_amd64_v0.0.4
+    container_name: slave_rmq_node_1_v0.0.3
+    hostname: slave_rmq_node_1
+    command: rabbitmq-server
+    restart: always
+    networks:
+      - chat_server_network
+    # links:
+    #   - master_rabbitmq_node
+    # ports:
+    #   - "15671:15671"
+    #   - "15676:15676"
+    volumes:
+      - ./volume/slave_rmq_node_1/data/:/var/lib/rabbitmq/mnesia
+      - ./volume/slave_rmq_node_1/log/:/var/log/rabbitmq/
+      - /usr/bin/qemu-arm-static:/usr/bin/qemu-arm-static
+    environment:
+      - RABBITMQ_ERLANG_COOKIE=${RABBITMQ_ERLANG_COOKIE}
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+      - CLUSTERED=true
+      - CLUSTER_WITH=master_rmq_node
+      - RAM_NODE=false
+
+
+  slave_rabbitmq_node_2:
+    image: gjhong1129/examples:rmq_amd64_v0.0.4
+    container_name: slave_rmq_node_2_v0.0.3
+    hostname: slave_rmq_node_2
+    command: rabbitmq-server
+    networks:
+      - chat_server_network
+    # links:
+    #   - master_rabbitmq_node
+    #   - slave_rabbitmq_node_1
+    # ports:
+    #   - "15671:15671"
+    #   - "15676:15676"
+    volumes:
+      - ./volume/slave_rmq_node_2/data/:/var/lib/rabbitmq/mnesia
+      - ./volume/slave_rmq_node_2/log/:/var/log/rabbitmq/
+      - /usr/bin/qemu-arm-static:/usr/bin/qemu-arm-static
+    environment:
+      - RABBITMQ_ERLANG_COOKIE=${RABBITMQ_ERLANG_COOKIE}
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+      - CLUSTERED=true
+      - CLUSTER_WITH=master_rmq_node
+      - RAM_NODE=false
+    healthcheck:
+      test: [ "CMD", "nc", "-z", "localhost", "5671" ]
+      interval: 5s
+      timeout: 15s
+      retries: 1
+
+  haproxy:
+    image: gjhong1129/examples:chat_server_haproxy_amd64_v0.0.4
+    container_name: haproxy_v0.0.1
+    hostname: haproxy
+    restart: always
+    ports:
+      - "443:443"
+      - "5671:5671"
+      # - "1936:1936"
+    networks:
+      - chat_server_network
+      - chat_server_front_network
+    external_links:
+      - chat_server:chat_server
+    volumes:
+      - /usr/bin/qemu-arm-static:/usr/bin/qemu-arm-static
+    depends_on:
+      - master_rabbitmq_node
+      - slave_rabbitmq_node_1
+      - slave_rabbitmq_node_2
+    # depends_on:
+    #   master_rabbitmq_node:
+    #     condition: service_healthy
+    #   slave_rabbitmq_node_1:
+    #     condition: service_healthy
+    #   slave_rabbitmq_node_2:
+    #     condition: service_healthy
+      # 도커 네트워크 : 컨테이너 네트워크
+
+networks:
+  chat_server_network:
+    driver: bridge
+  chat_server_front_network:
+    external: true

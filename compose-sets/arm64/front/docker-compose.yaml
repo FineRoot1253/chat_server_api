@@ -1,0 +1,164 @@
+version: "3"
+services:
+  master_rabbitmq_node:
+    image: gjhong1129/examples:rmq_arm64_v0.0.17
+    container_name: master_rmq_node
+    hostname: master_rmq_node
+    command: rabbitmq-server
+    restart: always
+    networks:
+      - chat_server_network
+    volumes:
+      - ./volume/master_rmq_node/data/:/var/lib/rabbitmq/mnesia
+      - ./volume/master_rmq_node/log/:/var/log/rabbitmq/
+    environment:
+      - RABBITMQ_ERLANG_COOKIE=${RABBITMQ_ERLANG_COOKIE}
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 30s
+      retries: 3
+
+  slave_rabbitmq_node_1:
+    image: gjhong1129/examples:rmq_arm64_v0.0.17
+    container_name: slave_rmq_node_1
+    hostname: slave_rmq_node_1
+    command: rabbitmq-server
+    restart: always
+    networks:
+      - chat_server_network
+    volumes:
+      - ./volume/slave_rmq_node_1/data/:/var/lib/rabbitmq/mnesia
+      - ./volume/slave_rmq_node_1/log/:/var/log/rabbitmq/
+    environment:
+      - RABBITMQ_ERLANG_COOKIE=${RABBITMQ_ERLANG_COOKIE}
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+      - CLUSTERED=true
+      - CLUSTER_WITH=master_rmq_node
+      - RAM_NODE=false
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 30s
+      retries: 3
+
+  slave_rabbitmq_node_2:
+    image: gjhong1129/examples:rmq_arm64_v0.0.17
+    container_name: slave_rmq_node_2
+    hostname: slave_rmq_node_2
+    command: rabbitmq-server
+    networks:
+      - chat_server_network
+    volumes:
+      - ./volume/slave_rmq_node_2/data/:/var/lib/rabbitmq/mnesia
+      - ./volume/slave_rmq_node_2/log/:/var/log/rabbitmq/
+    environment:
+      - RABBITMQ_ERLANG_COOKIE=${RABBITMQ_ERLANG_COOKIE}
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+      - CLUSTERED=true
+      - CLUSTER_WITH=master_rmq_node
+      - RAM_NODE=false
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 30s
+      retries: 3
+
+  haproxy_amqp_load_balancer:
+    image: gjhong1129/examples:chat_server_haproxy_amqp_arm64_v0.0.1
+    container_name: haproxy_amqp_v0.0.1
+    hostname: haproxy_amqp_lb
+    restart: always
+    expose:
+      - "5672"
+      - "27002"
+    networks:
+      - chat_server_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:27002"]
+      interval: 200s
+      timeout: 200s
+      retries: 5
+      # 도커 네트워크 : 컨테이너 네트워크
+
+  postgresql:
+    image: gjhong1129/examples:chat_server_db_arm64_v0.0.2
+    container_name: chat_server_db_v0.0.9
+    restart: always
+    networks:
+      - chat_server_network
+    expose:
+      - "26000"
+    ports:
+      - "33333:26000"
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_PWD}"
+      POSTGRES_DB: "${POSTGRES_DB}"
+    command: postgres -p 26000 -c config_file=/etc/postgresql/postgresql.conf
+    volumes:
+      - ./volume/graphgresql/data/:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      - haproxy_amqp_load_balancer
+
+  redis:
+    image: redis:latest
+    container_name: chat_server_redis_v0.0.2
+    restart: always
+    networks:
+      - chat_server_network
+    expose:
+      - "25000"
+    volumes:
+      - ./volume/redis/data/:/data
+    command: redis-server --port 25000 --save 60 1 --loglevel warning
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+    depends_on:
+      - haproxy_amqp_load_balancer
+  chat_server:
+    image: gjhong1129/examples:chat_server_arm64_v0.0.8
+    container_name: chat_server_v0.0.7
+    hostname: chat_server
+    restart: always
+    expose:
+      - "50000"
+    networks:
+      - chat_server_network
+    depends_on:
+     - postgresql      
+     - redis
+
+  haproxy:
+    image: gjhong1129/examples:chat_server_haproxy_arm64_v0.0.61
+    container_name: haproxy_v0.0.61
+    hostname: haproxy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8883:8883"
+      - "27001:1936"
+    expose:
+      - "1936"
+    networks:
+      - chat_server_network
+    depends_on:
+      - chat_server
+
+networks:
+  chat_server_network:
+    driver: bridge
+

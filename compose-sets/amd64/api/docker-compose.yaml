@@ -1,0 +1,57 @@
+version: "3"
+services:
+  postgresql:
+    image: gjhong1129/examples:chat_server_db_amd64_v0.0.5
+    container_name: chat_server_db_v0.0.9
+    restart: always
+    networks:
+      - chat_server_network
+    ports:
+      - "26000:5432"
+    environment:
+      POSTGRES_USER: "${POSTGRES_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_PWD}"
+      POSTGRES_DB: "${POSTGRES_DB}"
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    volumes:
+      - ./volume/graphgresql/data/:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:latest
+    container_name: chat_server_redis_v0.0.2
+    restart: always
+    networks:
+      - chat_server_network
+    ports:
+      - "25000:6379"
+    volumes:
+      - ./volume/redis/data/:/data
+    command: redis-server --port 6379 --save 60 1 --loglevel warning
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
+  chat_server:
+    image: gjhong1129/examples:chat_server_amd64_v0.0.9
+    container_name: chat_server_v0.0.2
+    hostname: chat_server
+    restart: always
+    networks:
+      - chat_server_network
+    depends_on:
+      - master_rabbitmq_node
+      - slave_rabbitmq_node_1
+      - slave_rabbitmq_node_2
+
+networks:
+  chat_server_network:
+    driver: bridge
+  chat_server_front_network:
+    external: true

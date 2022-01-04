@@ -1,0 +1,6 @@
+.env
+*.pem
+*.p12
+*.crt
+volume/ 
+chat-88196-firebase-adminsdk-5es5m-ccf8c2cbfd.json

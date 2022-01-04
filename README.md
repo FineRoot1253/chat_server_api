@@ -1,16 +1,16 @@
 # chat_server_api 디테일
 
-![e24d9680-e94d-11e9-977a-54046597cf22.png](/chat_server_api 디테일 bfb7b12835be4b89b484333f06e9b38c/e24d9680-e94d-11e9-977a-54046597cf22.png)
+![e24d9680-e94d-11e9-977a-54046597cf22.png](/chat_server_api%20디테일%20bfb7b12835be4b89b484333f06e9b38c/e24d9680-e94d-11e9-977a-54046597cf22.png)
 
 ## RabbitMQ + Golang 채팅 서버
 
 - 전체 네트워크 구상도
     
-    ![KakaoTalk_Image_2022-01-02-15-25-39.jpeg](/chat_server_api 디테일 bfb7b12835be4b89b484333f06e9b38c/KakaoTalk_Image_2022-01-02-15-25-39.jpeg)
+    ![KakaoTalk_Image_2022-01-02-15-25-39.jpeg](/chat_server_api%20디테일%20bfb7b12835be4b89b484333f06e9b38c/KakaoTalk_Image_2022-01-02-15-25-39.jpeg)
     
 - chat_server
     
-    ![KakaoTalk_Photo_2022-01-02-15-26-09.jpeg](/chat_server_api 디테일 bfb7b12835be4b89b484333f06e9b38c/KakaoTalk_Photo_2022-01-02-15-26-09.jpeg)
+    ![KakaoTalk_Photo_2022-01-02-15-26-09.jpeg](/chat_server_api%20디테일%20bfb7b12835be4b89b484333f06e9b38c/KakaoTalk_Photo_2022-01-02-15-26-09.jpeg)
     
     - **단일 고루틴 역할**
         1. 각 채팅방 메시지큐 sub
@@ -27,7 +27,7 @@
         > - 아디 비번
         >     - ~~보안상 비밀...~~
         
-        ![KakaoTalk_Image_2022-01-02-15-35-27.jpeg](/chat_server_api 디테일 bfb7b12835be4b89b484333f06e9b38c/KakaoTalk_Image_2022-01-02-15-35-27.jpeg)
+        ![KakaoTalk_Image_2022-01-02-15-35-27.jpeg](/chat_server_api%20디테일%20bfb7b12835be4b89b484333f06e9b38c/KakaoTalk_Image_2022-01-02-15-35-27.jpeg)
         
     - **메시지큐 역할**
         1. 검은 메시지 큐는 각 채팅방의 pub하는 send 전용 메시지큐.
@@ -35,7 +35,7 @@
 - **ERD**
     - chat_server_db
         
-        ![스크린샷 2022-01-02 오후 2.59.15.png](/chat_server_api 디테일 bfb7b12835be4b89b484333f06e9b38c/%E1%84%89%E1%85%B3%E1%84%8F%E1%85%B3%E1%84%85%E1%85%B5%E1%86%AB%E1%84%89%E1%85%A3%E1%86%BA_2022-01-02_%E1%84%8B%E1%85%A9%E1%84%92%E1%85%AE_2.59.15.png)
+        ![스크린샷 2022-01-02 오후 2.59.15.png](/chat_server_api%20디테일%20bfb7b12835be4b89b484333f06e9b38c/%E1%84%89%E1%85%B3%E1%84%8F%E1%85%B3%E1%84%85%E1%85%B5%E1%86%AB%E1%84%89%E1%85%A3%E1%86%BA_2022-01-02_%E1%84%8B%E1%85%A9%E1%84%92%E1%85%AE_2.59.15.png)
         
         각 상태 테이블을 넣은 이유는 로그의 목적이 제일 크다.
         
@@ -43,7 +43,7 @@
         
     - chat_log_db
         
-        ![스크린샷 2022-01-02 오후 2.59.30.png](/chat_server_api 디테일 bfb7b12835be4b89b484333f06e9b38c/%E1%84%89%E1%85%B3%E1%84%8F%E1%85%B3%E1%84%85%E1%85%B5%E1%86%AB%E1%84%89%E1%85%A3%E1%86%BA_2022-01-02_%E1%84%8B%E1%85%A9%E1%84%92%E1%85%AE_2.59.30.png)
+        ![스크린샷 2022-01-02 오후 2.59.30.png](/chat_server_api%20디테일%20bfb7b12835be4b89b484333f06e9b38c/%E1%84%89%E1%85%B3%E1%84%8F%E1%85%B3%E1%84%85%E1%85%B5%E1%86%AB%E1%84%89%E1%85%A3%E1%86%BA_2022-01-02_%E1%84%8B%E1%85%A9%E1%84%92%E1%85%AE_2.59.30.png)
         
 - **chat_server 중요 spec**
     - go 1.16.6

@@ -152,8 +152,8 @@ services:
     depends_on:
       - haproxy_amqp_load_balancer
   chat_server:
-    image: gjhong1129/examples:chat_server_amd64_v0.0.43
-    container_name: chat_server_v0.0.34
+    image: gjhong1129/examples:chat_server_amd64_v0.0.49
+    container_name: chat_server_v0.0.40
     hostname: chat_server
     restart: always
     platform: linux/amd64

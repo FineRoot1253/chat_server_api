@@ -105,27 +105,27 @@ func consumeAndCount(id string) ErrorStateType {
 			if res != None {
 				return res
 			}
-			break;
+			break
 			/// Chat_State == 3
 		case int64(User_Room_Exit_Msg):
 			res := whenMsgStateUserRoomExit(models.Member{Member_Id:int64(pubData.MemberId),Room: models.Room{Room_Id: int64(pubData.RoomId)}})
 			if res != None {
 				return res
 			}
-			break;
+			break
 			/// Chat_State == 3
 		case int64(User_Room_Add_Msg):
 			res := whenMsgStateUserRoomAdd(pubData.ChatContent, int64(pubData.RoomId))
 			if res != None {
 				return res
 			}
-			break;
+			break
 		default:
 			res := whenMsgStateNormal(&pubData,redisConn, id)
 			if res != None {
 				return res
 			}
-			break;
+			break
 		}
 
 		length, err := checkChatListLength(id)
@@ -429,13 +429,15 @@ func whenMsgStateUserRoomExit(member models.Member) ErrorStateType {
 	/// 3) 유저가 아무도 없는 상태인 경우
 	if userList == nil {
 		/// 방 폭파 했다고 상태 생성
-		if err := db.Connector.Create(&models.RoomState{Room: models.Room{Room_Id: member.Room_Id}, Room_State: 0, CreateAt: time.Now()}); err != nil {
+		if err := db.Connector.Create(&models.RoomState{Room: models.Room{Room_Id: member.Room.Room_Id}, Room_State: 0, CreateAt: time.Now()}).Error; err != nil {
+			log.Print("### 에러발생 : RoomState 생성중 ### ")
 			log.Print(err)
 			return Rdb_Error
 		}
 		/// 메시지큐 파괴 [누가 컨슘을 하던, 아직 메시지가 남아 있던]
-		if _, err := RabbitMQChan.QueueDelete(strconv.Itoa(int(member.Room_Id)), false, false, false); err != nil {
-			log.Print(err)
+		if _, err := RabbitMQChan.QueueDelete(strconv.Itoa(int(member.Room.Room_Id)), false, false, false); err != nil {
+			log.Print("### 에러발생 : QueueDelete중 ###")
+			log.Print(err.Error())
 			return Unexpected_Error
 		}
 	}

@@ -1,4 +1,4 @@
-# chat_server_api 디테일
+# chat_server_api
 
 ![e24d9680-e94d-11e9-977a-54046597cf22.png](/chat_server_api%20디테일%20bfb7b12835be4b89b484333f06e9b38c/e24d9680-e94d-11e9-977a-54046597cf22.png)
 

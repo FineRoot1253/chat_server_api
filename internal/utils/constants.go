@@ -1,4 +1,4 @@
-package lib
+package utils
 
 type ChatStateType int64
 type ErrorStateType int64

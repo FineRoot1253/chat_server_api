@@ -1,4 +1,4 @@
-package lib
+package service
 
 import (
 	"encoding/json"
@@ -6,8 +6,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/JunGeunHong1129/chat_server_api/db"
-	"github.com/JunGeunHong1129/chat_server_api/models"
+	chat_log "github.com/JunGeunHong1129/chat_server_api/internal/log"
+	"github.com/JunGeunHong1129/chat_server_api/internal/models"
+	"github.com/JunGeunHong1129/chat_server_api/internal/utils"
 	"github.com/gomodule/redigo/redis"
 	"github.com/streadway/amqp"
 )
@@ -32,7 +33,7 @@ func RabbitMQConnect() {
 func RabbitMQFirstInit() {
 
 	var roomStates []models.RoomState
-	resultSet := db.Connector.Raw("select * from chat_server_dev.room_state where room_state_id  in (select max(room_state_id) from chat_server_dev.room_state group by room_id) and room_state = 1;").Find(&roomStates)
+	resultSet := service.Connector.Raw("select * from chat_server_dev.room_state where room_state_id  in (select max(room_state_id) from chat_server_dev.room_state group by room_id) and room_state = 1;").Find(&roomStates)
 
 	if resultSet.Error != nil {
 		log.Panic(resultSet.Error)
@@ -40,8 +41,8 @@ func RabbitMQFirstInit() {
 	for _, v := range roomStates {
 		strId := strconv.Itoa(int(v.Room_Id))
 		RabbitMQChan.QueueDeclare(strId, false, false, false, false, nil)
-		errChan := make(chan ErrorStateType, 1)
-		go func(id string, errChan chan ErrorStateType) {
+		errChan := make(chan utils.ErrorStateType, 1)
+		go func(id string, errChan chan utils.ErrorStateType) {
 			select {
 			case <-errChan:
 				/// 채팅방 폭파시키든 행위에 대한 리액션 메시지 보내야함
@@ -54,18 +55,18 @@ func RabbitMQFirstInit() {
 	}
 }
 
-func consumeAndCount(id string) ErrorStateType {
+func consumeAndCount(id string) utils.ErrorStateType {
 	log.Print("room " + id + ", consume start")
 	msgs, err := RabbitMQChan.Consume(id, "", true, false, false, false, nil)
 
 	if err != nil {
-		return Unexpected_Error
+		return utils.Unexpected_Error
 	}
 
 	for d := range msgs {
 
 		log.Print("I Recevied SomeThing : ", d.Body, " ::: total : ", len(msgs))
-		var pubData PublishData
+		var pubData chat_log.PublishData
 		var chatLogList []models.ChatLog
 		var chatStateList []models.ChatState
 
@@ -75,7 +76,7 @@ func consumeAndCount(id string) ErrorStateType {
 
 			log.Print("에러발생 : ", err)
 
-			return Unmarshaling_Error
+			return utils.Unmarshaling_Error
 		}
 
 		bytes,err := json.Marshal(&pubData)
@@ -83,7 +84,7 @@ func consumeAndCount(id string) ErrorStateType {
 
 			log.Print("에러발생 : ", err)
 
-			return Unmarshaling_Error
+			return utils.Unmarshaling_Error
 		}
 
 		log.Print("Recevied Data : ", pubData)
@@ -95,34 +96,34 @@ func consumeAndCount(id string) ErrorStateType {
 			ContentEncoding: "utf-8",
 			Body:        bytes}); err != nil {
 			log.Print(err)
-			return Unexpected_Error
+			return utils.Unexpected_Error
 
 		}
 		switch pubData.ChatState {
 		/// Chat_State == 2
-		case int64(Remove_To_All_Msg):
+		case int64(utils.Remove_To_All_Msg):
 			res := whenMsgStateDelete(&pubData, redisConn, id, d.Body)
-			if res != None {
+			if res != utils.None {
 				return res
 			}
 			break
 			/// Chat_State == 3
-		case int64(User_Room_Exit_Msg):
+		case int64(utils.User_Room_Exit_Msg):
 			res := whenMsgStateUserRoomExit(models.Member{Member_Id:int64(pubData.MemberId),Room: models.Room{Room_Id: int64(pubData.RoomId)}})
-			if res != None {
+			if res != utils.None {
 				return res
 			}
 			break
 			/// Chat_State == 3
-		case int64(User_Room_Add_Msg):
+		case int64(utils.User_Room_Add_Msg):
 			res := whenMsgStateUserRoomAdd(pubData.ChatContent, int64(pubData.RoomId))
-			if res != None {
+			if res != utils.None {
 				return res
 			}
 			break
 		default:
 			res := whenMsgStateNormal(&pubData,redisConn, id)
-			if res != None {
+			if res != utils.None {
 				return res
 			}
 			break
@@ -131,27 +132,27 @@ func consumeAndCount(id string) ErrorStateType {
 		length, err := checkChatListLength(id)
 		if err != nil {
 			log.Print("에러발생 6 : ", err)
-			return Redis_Error
+			return utils.Redis_Error
 		}
 
 		log.Print("I Check ", id, "`s Length : ", length)
 		log.Print("3 DONE")
 
 		/// RDB 저장 로직
-		if *length%PER_SAVE_AMOUNT == 0 && *length != 0 {
+		if *length%utils.PER_SAVE_AMOUNT == 0 && *length != 0 {
 			log.Print("4")
 
 			val1, err1 := redis.Strings(redisConn.Do("LRANGE", id, 0, -1))
 			log.Print("result : ", len(val1))
 			if err1 != nil {
 				log.Print("에러발생 7 : ", err1)
-				return Redis_Error
+				return utils.Redis_Error
 			}
 			val2, err2 := redis.ByteSlices(redisConn.Do("LRANGE", id+"_state", 0, -1))
 			log.Print("result : ", len(val2))
 			if err2 != nil {
 				log.Print("에러발생 8 : ", err2)
-				return Redis_Error
+				return utils.Redis_Error
 			}
 			for _, v := range val1 {
 				var chatTemp models.ChatLog
@@ -159,15 +160,15 @@ func consumeAndCount(id string) ErrorStateType {
 				val3, err3 := redis.Bytes(redisConn.Do("GET", "\""+v+"\""))
 				if err3 != nil {
 					log.Print("에러 발생 !! : ", err3, " ::: ", v)
-					return Redis_Error
+					return utils.Redis_Error
 				}
 				if err := json.Unmarshal(val3, &chatTemp); err != nil {
 					log.Print("에러 발생 !! : ", err)
-					return Unmarshaling_Error
+					return utils.Unmarshaling_Error
 				}
 				if err := json.Unmarshal(val3, &chatStateTemp); err != nil {
 					log.Print("에러 발생 !! : ", err)
-					return Unmarshaling_Error
+					return utils.Unmarshaling_Error
 				}
 
 				chatLogList = append(chatLogList, chatTemp)
@@ -181,14 +182,14 @@ func consumeAndCount(id string) ErrorStateType {
 
 			if err := db.Connector.Save(&chatLogList).Error; err != nil {
 				log.Print("에러발생 9 : ", err)
-				return Rdb_Error
+				return utils.Rdb_Error
 			}
 			chatStateNewList := make([]models.ChatState, len(val2))
 
 			for idx, v := range val2 {
 				if err := json.Unmarshal(v, &chatStateNewList[idx]); err != nil {
 					log.Print("에러발생 11 : ", err)
-					return Unmarshaling_Error
+					return utils.Unmarshaling_Error
 				}
 				chatStateList = append(chatStateList, chatStateNewList[idx])
 			}
@@ -196,19 +197,19 @@ func consumeAndCount(id string) ErrorStateType {
 
 			if err := db.Connector.Save(&chatStateList).Error; err != nil {
 				log.Print("에러발생 12 : ", err)
-				return Rdb_Error
+				return utils.Rdb_Error
 			}
 			///테스트용
 			// redisConn.Do("DEL", id)
 			if _, err := redisConn.Do("DEL", id+"_state"); err != nil {
-				return Redis_Error
+				return utils.Redis_Error
 			}
 			log.Print("4 DONE")
 
 		}
 		log.Print("5")
 	}
-	return None
+	return utils.None
 }
 
 func checkChatListLength(id string) (*int64, error) {
@@ -331,12 +332,12 @@ func whenMsgStateDelete(pubData *PublishData, redisConn redis.Conn, id string, d
 	val1, err1 := redis.Bytes(redisConn.Do("GET", "\""+pubData.Chat_Id+"\""))
 	if err1 != nil {
 		log.Print("에러발생 1 : ", err1)
-		return Redis_Error
+		return utils.Redis_Error
 	}
 
 	if err2 := json.Unmarshal(val1, &oldPubData); err2 != nil {
 		log.Print("에러발생 2 : ", err2)
-		return Unmarshaling_Error
+		return utils.Unmarshaling_Error
 	}
 
 	/// 신규 chatlog 구조에 추가해준다.
@@ -345,19 +346,19 @@ func whenMsgStateDelete(pubData *PublishData, redisConn redis.Conn, id string, d
 	inputData, err := json.Marshal(pubData)
 	if err != nil {
 		log.Print("에러발생 3 : ", err)
-		return Marshal_Error
+		return utils.Marshal_Error
 	}
 
 	/// 채팅 로그 업데이트
 	if _, err := redisConn.Do("SET", pubData.Chat_Id, inputData); err != nil {
 		log.Print("에러발생 4 : ", err)
-		return Redis_Error
+		return utils.Redis_Error
 	}
 
 	/// 들어온 상태 메시지 전체를 상태 리스트에 추가
 	if _, err := redisConn.Do("RPUSH", id+"_state", d); err != nil {
 		log.Print("에러발생 5 : ", err)
-		return Redis_Error
+		return utils.Redis_Error
 	}
 
 	log.Print("1 done")
@@ -374,7 +375,7 @@ func whenMsgStateNormal(pubData *PublishData, redisConn redis.Conn, id string) E
 	length, err := checkChatListLength(id)
 	if err != nil {
 		log.Print("에러발생 4 : ", err)
-		return Redis_Error
+		return utils.Redis_Error
 	}
 	log.Print("2.1")
 	pubData.List_Index = int(*length)
@@ -386,14 +387,14 @@ func whenMsgStateNormal(pubData *PublishData, redisConn redis.Conn, id string) E
 	inputData, err := json.Marshal(pubData)
 	if err != nil {
 		log.Print("에러발생 5 : ", err)
-		return Marshal_Error
+		return utils.Marshal_Error
 
 	}
 	log.Print("2.3")
 	n, err := redisConn.Do("SETNX", "\""+pubData.Chat_Id+"\"", inputData)
 	if err != nil {
 		log.Print("에러발생 6 : ", err)
-		return Redis_Error
+		return utils.Redis_Error
 	}
 
 	log.Print("성공 6 : ", n)
@@ -402,28 +403,28 @@ func whenMsgStateNormal(pubData *PublishData, redisConn redis.Conn, id string) E
 	n2, err1 := redisConn.Do("RPUSH", id, pubData.Chat_Id)
 	if err1 != nil {
 		log.Print("에러발생 7 : ", err)
-		return Redis_Error
+		return utils.Redis_Error
 	}
 	log.Print("성공 7 : ", n2)
 	log.Print("2 done")
 
 	log.Print("3")
-	return None
+	return utils.None
 }
 
-func whenMsgStateUserRoomExit(member models.Member) ErrorStateType {
+func whenMsgStateUserRoomExit(member models.Member) utils.ErrorStateType {
 
 	/// 1) 맴버 새 상태 생성
 	if err := db.Connector.Create(&models.MemberState{Member: member, Member_State: 0, CreateAt: time.Now()}).Error; err != nil {
 		log.Print(err)
-		return Rdb_Error
+		return utils.Rdb_Error
 	}
 
 	var userList []models.User
 	/// 2) 새 유저 리스트 받음. 이건...의미 있남...?
 	if err := db.Connector.Raw("select * from (select * from chat_server_dev.\"member\" where room_id = ?) as m where m.member_id in (select member_id from chat_server_dev.member_state where member_state_id  in (select max(member_state_id) from chat_server_dev.member_state group by member_id) and member_state = 1);", member.Room_Id).Scan(&userList).Error; err != nil {
 		log.Print(err)
-		return Rdb_Error
+		return utils.Rdb_Error
 	}
 
 	/// 3) 유저가 아무도 없는 상태인 경우
@@ -432,26 +433,26 @@ func whenMsgStateUserRoomExit(member models.Member) ErrorStateType {
 		if err := db.Connector.Create(&models.RoomState{Room: models.Room{Room_Id: member.Room.Room_Id}, Room_State: 0, CreateAt: time.Now()}).Error; err != nil {
 			log.Print("### 에러발생 : RoomState 생성중 ### ")
 			log.Print(err)
-			return Rdb_Error
+			return utils.Rdb_Error
 		}
 		/// 메시지큐 파괴 [누가 컨슘을 하던, 아직 메시지가 남아 있던]
 		if _, err := RabbitMQChan.QueueDelete(strconv.Itoa(int(member.Room.Room_Id)), false, false, false); err != nil {
 			log.Print("### 에러발생 : QueueDelete중 ###")
 			log.Print(err.Error())
-			return Unexpected_Error
+			return utils.Unexpected_Error
 		}
 	}
 
-	return None
+	return utils.None
 }
 
-func whenMsgStateUserRoomAdd(userListStr string, roomId int64) ErrorStateType {
+func whenMsgStateUserRoomAdd(userListStr string, roomId int64) utils.ErrorStateType {
 	var userList UserList
 
 	/// ex : `{"users":"[1,2,3]"}` 이런 데이터를 받기를 고대하고 있다.
 	if err := json.Unmarshal([]byte(userListStr), &userList); err != nil {
 		log.Print(err)
-		return Unmarshaling_Error
+		return utils.Unmarshaling_Error
 	}
 
 	/// 맴버 리스트 + 맴버 상태 리스트 
@@ -464,7 +465,7 @@ func whenMsgStateUserRoomAdd(userListStr string, roomId int64) ErrorStateType {
 	/// 추가될 맴버 생성
 	if err := db.Connector.Create(&memberList).Error; err != nil {
 		log.Print(err)
-		return Rdb_Error
+		return utils.Rdb_Error
 	}
 	for idx, _ := range userList.UserList {
 
@@ -473,8 +474,8 @@ func whenMsgStateUserRoomAdd(userListStr string, roomId int64) ErrorStateType {
 	/// 추가된 맴버들을 토대로 맴버 상태 생성
 	if err := db.Connector.Create(&memberStateList).Error; err != nil {
 		log.Print(err)
-		return Rdb_Error
+		return utils.Rdb_Error
 	}
 
-	return None
+	return utils.None
 }

@@ -1,4 +1,4 @@
-package lib
+package service
 
 import (
 	"context"
@@ -6,13 +6,14 @@ import (
 
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/messaging"
+	"github.com/JunGeunHong1129/chat_server_api/internal/utils"
 	"google.golang.org/api/option"
 )
 
 var FirebaseClient *messaging.Client
 
 func InitFirebase() {
-	opt := option.WithCredentialsFile(FIREBASE_ACCOUNT_FILE_PATH)
+	opt := option.WithCredentialsFile(utils.FIREBASE_ACCOUNT_FILE_PATH)
 
 	app, err := firebase.NewApp(context.Background(), nil, opt)
 	if err != nil {

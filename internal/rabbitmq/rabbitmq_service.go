@@ -69,7 +69,7 @@ func (service *service) consumeAndCount(id string) error {
 	msgs, err := service.channel.Consume(id, "", true, false, false, false, nil)
 
 	if err != nil {
-		return &utils.CommonError{Func: "",Data: "",Err: }
+		return &utils.CommonError{Func: "",Data: id, Err: }
 	}
 
 	for d := range msgs {

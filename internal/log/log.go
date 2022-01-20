@@ -30,47 +30,9 @@ type RemoveRequestModel struct {
 	ChatState int64  `json:"chat_state"`
 }
 
-type PublishData struct {
-	RoomId      int       `json:"room_id"`
-	MemberId    int       `json:"member_id"`
-	UserId      int       `json:"user_id"`
-	ChatState   int64     `json:"chat_state"`
-	ChatContent string    `json:"chat_content"`
-	Chat_Id     string    `json:"chat_id"`
-	List_Index  int       `json:"list_index,omitempty"`
-	CreateAt    time.Time `json:"createat,omitempty"`
-}
 
-func PublishThis(c *fiber.Ctx) error {
 
-	var pubData PublishData
 
-	if err := json.Unmarshal(c.Body(), &pubData); err != nil {
-		log.Print("데이터 파싱중 에러가 발생했습니다.1",err)
-
-		return c.Status(200).JSON(models.ResultModel{Code: -1, Msg: "데이터 파싱중 에러가 발생했습니다."})
-	}
-	if pubData.ChatState != 2 {
-		pubData.Chat_Id = strconv.Itoa(pubData.RoomId) + "_" + strconv.Itoa(pubData.MemberId) + "_" + time.Now().String()
-	}
-
-	body, err := json.Marshal(pubData)
-	if err != nil {
-		log.Print("데이터 파싱중 에러가 발생했습니다.2",err)
-		return c.Status(200).JSON(models.ResultModel{Code: -1, Msg: "데이터 파싱중 에러가 발생했습니다."})
-	}
-
-	log.Print("PUBDATA : ", pubData.Chat_Id)
-
-	if err := RabbitMQChan.Publish("", strconv.Itoa(pubData.RoomId), false, false, amqp.Publishing{
-		ContentType: "Application/json",
-		Body:        body}); err != nil {
-		log.Print(err)
-		return c.Status(200).JSON(models.ResultModel{Code: -1, Msg: "채팅 전송중 에러 발생"})
-	}
-
-	return c.Status(200).JSON(models.ResultModel{Code: 1, Msg: "ok", Result: pubData.Chat_Id})
-}
 
 func GetRestOfMessage(c *fiber.Ctx) error {
 

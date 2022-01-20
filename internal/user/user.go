@@ -1,4 +1,4 @@
-package lib
+package user
 
 import (
 	"encoding/base64"
@@ -9,8 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/JunGeunHong1129/chat_server_api/db"
-	"github.com/JunGeunHong1129/chat_server_api/models"
+	"github.com/JunGeunHong1129/chat_server_api/internal/models"
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
 

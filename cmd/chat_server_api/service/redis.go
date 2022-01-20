@@ -4,6 +4,16 @@ import (
 	"github.com/gomodule/redigo/redis"
 )
 
+type Service interface {
+	
+}
+
+type service struct {
+	 *redis.Pool
+}
+
+
+
 var redisPool = newPool()
 
 func newPool() *redis.Pool {

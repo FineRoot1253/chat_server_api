@@ -9,6 +9,7 @@ import (
 	"github.com/JunGeunHong1129/chat_server_api/db"
 	"github.com/JunGeunHong1129/chat_server_api/models"
 	"github.com/gofiber/fiber/v2"
+	"github.com/streadway/amqp"
 )
 
 type Service interface {
@@ -18,28 +19,16 @@ type Service interface {
 
 type service struct {
 	repository Repository
+	channel amqp.Channel
 }
 
-func NewService(repo Repository) Service {
-	return &service{repository: repo}
+func NewService(repo Repository,channel amqp.Channel) Service {
+	return &service{repository: repo,channel: channel}
 }
 
 func (s *service) GetRoomListOfUser(key int) ([]models.RoomList, error) {
-	// 핸들러 담당
-	// key := c.Query("user_id")
-	// var roomList []models.RoomList
-	// keyInt, err := strconv.Atoi(key)
-	// if err != nil {
-	// 	log.Print(err)
-	// 	return c.Status(200).JSON(models.ResultModel{Code: -1, Msg: "데이터 파싱중 에러가 발생했습니다."})
-	// }
 
-	// if err := db.Connector.Raw("select r.room_id , r.room_name , r.createat,(select count(*) from (select * from chat_server_dev.\"member\" where room_id = r.room_id ) as m where m.member_id in (select member_id from chat_server_dev.member_state where member_state_id  in (select max(member_state_id) from chat_server_dev.member_state group by member_id) and member_state = 1)) as room_count from chat_server_dev.room as r join (select  room_id  from (select * from chat_server_dev.\"member\" where user_id = ? ) m join (select * from chat_server_dev.member_state where member_state_id  in (select max(member_state_id) from chat_server_dev.member_state group by member_id) and member_state = 1) ms  on m.member_id = ms.member_id) rlist on rlist.room_id = r.room_id;", keyInt).Scan(&roomList).Error; err != nil {
-	// 	log.Print(err)
-	// 	return nil, err
-	// }
-
-	return s.repository.GetRoomList(key)
+	return s.repository.GetRoomListOfUser(key)
 
 }
 
@@ -50,6 +39,7 @@ func (s *service) GetRoomListOfUser(key int) ([]models.RoomList, error) {
 // 4)  rabbitmq 로직
 // 5)  3)에서 조회한 리스트 유저들에게 fcm 전송
 
+// TODO: handler 로직, 반드시 넣어야 함
 // 1,2,3)은 한 트렌젝션에서 실행되도록 수정할 것
 // 4,5)는 한 서비스 내에서 123) 실행후 실행되도록 보장 해야함
 func (s *service) CreateRoom(room models.Room, userList models.UserList) (*models.Room, []models.Member, error) {
@@ -57,53 +47,6 @@ func (s *service) CreateRoom(room models.Room, userList models.UserList) (*model
 	room.CreateAt = time.Now()
 
 	return s.repository.CreateRoom(room, userList)
-
-	// /// consume 시작
-	// errChan := make(chan ErrorStateType, 1)
-	// go func(id string, errChan chan ErrorStateType) {
-	// 	select {
-	// 	case <-errChan:
-	// 		/// 채팅방 폭파시키든 행위에 대한 리액션 메시지 보내야함
-	// 		switch <-errChan {
-	// 		case Unexpected_Error:
-	// 			return
-	// 		}
-	// 		return
-	// 	default:
-	// 		errChan <- consumeAndCount(id)
-	// 	}
-	// }(strconv.Itoa(int(room.Room_Id)), errChan)
-
-	// 3)  맴버, 맴버 상태 생성
-	// memberList := make([]models.Member, len(userList.UserList))
-	// memberStateList := make([]models.MemberState, len(userList.UserList))
-	// for idx, val := range userList.UserList {
-	// 	memberList[idx] = models.Member{Room: room, User: models.User{User_Id: val}, CreateAt: time.Now()}
-	// }
-
-	// if err := db.Connector.Create(&memberList).Error; err != nil {
-	// 	log.Print(err)
-	// 	return c.Status(200).JSON(models.ResultModel{Code: -1, Msg: "DB 작업중 에러가 발생했습니다."})
-	// }
-
-	// for i, _ := range memberList {
-
-	// 	memberStateList[i] = models.MemberState{Member: memberList[i], Member_State: 1, CreateAt: time.Now()}
-
-	// }
-
-	// if err := db.Connector.Create(&memberStateList).Error; err != nil {
-	// 	log.Print(err)
-	// 	return c.Status(200).JSON(models.ResultModel{Code: -1, Msg: "DB 작업중 에러가 발생했습니다."})
-	// }
-
-	// 4)  중복없이 유저 상태 리스트 조회
-	// var userStateList []models.UserState
-
-	// if err := db.Connector.Raw("select * from chat_server_dev.user_state where user_state_id  in (select max(user_state_id) from (select * from (select * from chat_server_dev.user_state where user_state_id  in (select max(user_state_id) from chat_server_dev.user_state group by user_id) and user_state > 0)as us , (select m.user_id from chat_server_dev.\"member\" m, (select * from chat_server_dev.member_state where member_state_id  in (select max(member_state_id) from chat_server_dev.member_state group by member_id) and member_state = 1) as ms where m.member_id = ms.member_id and m.room_id = ?) as mainm where us.user_id = mainm.user_id ) as mainus group by mainus.user_fcm_token);", room.Room_Id).Scan(&userStateList).Error; err != nil {
-	// 	log.Print(err)
-	// 	return c.Status(200).JSON(models.ResultModel{Code: -1, Msg: "DB 작업중 에러가 발생했습니다."})
-	// }
 
 	// 2)  rabbitmq 로직
 	// if _, err := RabbitMQChan.QueueDeclare(strconv.Itoa(int(room.Room_Id)), false, false, false, false, nil); err != nil {

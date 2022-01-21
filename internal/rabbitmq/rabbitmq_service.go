@@ -7,21 +7,20 @@ import (
 	"time"
 
 	"github.com/JunGeunHong1129/chat_server_api/internal/models"
-	"github.com/JunGeunHong1129/chat_server_api/internal/room"
 	"github.com/JunGeunHong1129/chat_server_api/internal/utils"
-	"github.com/gofiber/fiber"
-	"github.com/gomodule/redigo/redis"
 	"github.com/streadway/amqp"
 )
 
-type Service interface{}
+type Service interface{
+	
+}
 
 type service struct {
 	channel    *amqp.Channel
 	repository Repository
 }
 
-func NewService(repository room.Repository) (Service, error) {
+func NewService(repository Repository) (Service, error) {
 	conn, err := amqp.Dial("amqp://g9bon:reindeer2017!@haproxy_amqp_lb:5672/")
 	if err != nil {
 		return nil, err
@@ -69,7 +68,7 @@ func (service *service) consumeAndCount(id string) error {
 	msgs, err := service.channel.Consume(id, "", true, false, false, false, nil)
 
 	if err != nil {
-		return &utils.CommonError{Func: "",Data: id, Err: }
+		return consumeLevelError(id, err)
 	}
 
 	for d := range msgs {
@@ -79,13 +78,11 @@ func (service *service) consumeAndCount(id string) error {
 		var chatLogList []models.ChatLog
 		var chatStateList []models.ChatState
 
-		redisConn := redisPool.Get()
-
 		if err := json.Unmarshal(d.Body, &pubData); err != nil {
 
 			log.Print("에러발생 : ", err)
 
-			return utils.Unmarshaling_Error
+			return consumeLevelError("", err)
 		}
 
 		bytes, err := json.Marshal(&pubData)
@@ -93,55 +90,50 @@ func (service *service) consumeAndCount(id string) error {
 
 			log.Print("에러발생 : ", err)
 
-			return utils.Unmarshaling_Error
+			return consumeLevelError("", err)
 		}
 
 		log.Print("Recevied Data : ", pubData)
 		log.Print("Recevied pubData.ChatContent  : ", pubData.ChatContent)
 
 		log.Print("Recevied pubData.ChatState  : ", pubData.ChatState, " :::: ", strconv.Itoa(pubData.RoomId)+"_u")
-		if err := service.channel.Publish("room_exchange", strconv.Itoa(pubData.RoomId)+"_u", false, false, amqp.Publishing{
-			ContentType:     "text/json",
-			ContentEncoding: "utf-8",
-			Body:            bytes}); err != nil {
-			log.Print(err)
-			return utils.Unexpected_Error
 
-		}
+		/// 받은 메시지 처리
 		switch pubData.ChatState {
 		/// Chat_State == 2
 		case int64(utils.Remove_To_All_Msg):
-			res := whenMsgStateDelete(&pubData, redisConn, id, d.Body)
-			if res != utils.None {
+			res := service.whenMsgStateDelete(&pubData, id, d.Body)
+			if res != nil {
 				return res
 			}
 			break
 			/// Chat_State == 3
 		case int64(utils.User_Room_Exit_Msg):
-			res := whenMsgStateUserRoomExit(models.Member{Member_Id: int64(pubData.MemberId), Room: models.Room{Room_Id: int64(pubData.RoomId)}})
-			if res != utils.None {
+			res := service.whenMsgStateUserRoomExit(models.Member{Member_Id: int64(pubData.MemberId), Room: models.Room{Room_Id: int64(pubData.RoomId)}})
+			if res != nil {
 				return res
 			}
 			break
 			/// Chat_State == 3
 		case int64(utils.User_Room_Add_Msg):
-			res := whenMsgStateUserRoomAdd(pubData.ChatContent, int64(pubData.RoomId))
-			if res != utils.None {
+			res := service.whenMsgStateUserRoomAdd(pubData.ChatContent, int64(pubData.RoomId))
+			if res != nil {
 				return res
 			}
 			break
 		default:
-			res := whenMsgStateNormal(&pubData, redisConn, id)
-			if res != utils.None {
+			res := service.whenMsgStateNormal(&pubData, id)
+			if res != nil {
 				return res
 			}
 			break
 		}
 
-		length, err := checkChatListLength(id)
+		/// RDB 저장여부 체크를 위한 조회
+		length, err := service.checkChatListLength(id)
 		if err != nil {
 			log.Print("에러발생 6 : ", err)
-			return utils.Redis_Error
+			return consumeLevelError("", err)
 		}
 
 		log.Print("I Check ", id, "`s Length : ", length)
@@ -151,33 +143,33 @@ func (service *service) consumeAndCount(id string) error {
 		if *length%utils.PER_SAVE_AMOUNT == 0 && *length != 0 {
 			log.Print("4")
 
-			val1, err1 := redis.Strings(redisConn.Do("LRANGE", id, 0, -1))
-			log.Print("result : ", len(val1))
+			val1, err1 := service.repository.GetChatLogList(id, 0)
 			if err1 != nil {
 				log.Print("에러발생 7 : ", err1)
-				return utils.Redis_Error
+				return consumeLevelError("", err1)
 			}
-			val2, err2 := redis.ByteSlices(redisConn.Do("LRANGE", id+"_state", 0, -1))
+			log.Print("result : ", len(val1))
+			val2, err2 := service.repository.GetChatLogStateList(id)
 			log.Print("result : ", len(val2))
 			if err2 != nil {
 				log.Print("에러발생 8 : ", err2)
-				return utils.Redis_Error
+				return consumeLevelError("", err2)
 			}
 			for _, v := range val1 {
 				var chatTemp models.ChatLog
 				var chatStateTemp models.ChatState
-				val3, err3 := redis.Bytes(redisConn.Do("GET", "\""+v+"\""))
+				val3, err3 := service.repository.GetChatLogData(v)
 				if err3 != nil {
 					log.Print("에러 발생 !! : ", err3, " ::: ", v)
-					return utils.Redis_Error
+					return consumeLevelError("", err3)
 				}
 				if err := json.Unmarshal(val3, &chatTemp); err != nil {
 					log.Print("에러 발생 !! : ", err)
-					return utils.Unmarshaling_Error
+					return consumeLevelError("", err)
 				}
 				if err := json.Unmarshal(val3, &chatStateTemp); err != nil {
 					log.Print("에러 발생 !! : ", err)
-					return utils.Unmarshaling_Error
+					return consumeLevelError("", err)
 				}
 
 				chatLogList = append(chatLogList, chatTemp)
@@ -188,45 +180,49 @@ func (service *service) consumeAndCount(id string) error {
 			if len(val1) > 5 {
 				chatStateList = chatStateList[len(val1)-5:]
 			}
-
-			if err := db.Connector.Save(&chatLogList).Error; err != nil {
-				log.Print("에러발생 9 : ", err)
-				return utils.Rdb_Error
-			}
 			chatStateNewList := make([]models.ChatState, len(val2))
 
 			for idx, v := range val2 {
 				if err := json.Unmarshal(v, &chatStateNewList[idx]); err != nil {
 					log.Print("에러발생 11 : ", err)
-					return utils.Unmarshaling_Error
+					return consumeLevelError("", err)
 				}
 				chatStateList = append(chatStateList, chatStateNewList[idx])
 			}
-			log.Print("저장전 chatStateList : ", chatStateList)
 
-			if err := db.Connector.Save(&chatStateList).Error; err != nil {
-				log.Print("에러발생 12 : ", err)
-				return utils.Rdb_Error
+			if err := service.repository.CreateChatLog(chatLogList, chatStateList); err != nil {
+				return consumeLevelError("", err)
 			}
+
 			///테스트용
 			// redisConn.Do("DEL", id)
-			if _, err := redisConn.Do("DEL", id+"_state"); err != nil {
-				return utils.Redis_Error
+			/// 21_01_21 까먹고있었는데 기억났다.
+			/// 이건 RDB테이블에 중복으로 데이터가 들어가는 것을 방지하기 위해 넣었다.
+			/// 이래야 전에 넣었던 상태 데이터 부터 이어서 넣기 때문에 한번 넣으면 초기화개념으로 날린다.
+			if err := service.repository.DeleteChatLogStateList(id); err != nil {
+				return consumeLevelError("", err)
 			}
 			log.Print("4 DONE")
 
 		}
 		log.Print("5")
+		if err := service.channel.Publish("room_exchange", strconv.Itoa(pubData.RoomId)+"_u", false, false, amqp.Publishing{
+			ContentType:     "text/json",
+			ContentEncoding: "utf-8",
+			Body:            bytes}); err != nil {
+			log.Print(err)
+			return consumeLevelError("", err)
+
+		}
 	}
-	return utils.None
+	return nil
 }
 
-func checkChatListLength(id string) (*int64, error) {
+func (service *service) checkChatListLength(id string) (*int64, error) {
 	log.Print("2.1.1")
-	redisConn := redisPool.Get()
 	log.Print("2.1.1 DONE")
 	log.Print("2.1.2")
-	res, err := redis.Int64(redisConn.Do("LLen", id))
+	res, err := service.repository.GetChatLogStateListLength(id)
 	if err != nil {
 		log.Print("2.1.2 err !!!")
 		// log.Panicln("SomeThings Wrong While get length : ", err)
@@ -234,60 +230,28 @@ func checkChatListLength(id string) (*int64, error) {
 	}
 	log.Print("2.1.2", res)
 
-	return &res, nil
+	return res, nil
 }
 
-// func getChatLogList(id string) (*ChatListModel,error) {
-// 	redisConn, err := redisPool.DialContext(backGroundCtx)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	val1, err1 := redis.ByteSlices(redisConn.Do("LRANGE", id, 0, -1))
-// 	log.Print("result : ", len(val1))
-// 	if err1 != nil {
-// 		panic(err1)
-// 	}
-
-// 	chatLogList := make([]models.ChatLog, len(val1))
-// 	chatStateList := make([]models.ChatState, len(val1))
-
-// 	for idx, v := range val1 {
-// 		if err2 := json.Unmarshal(v, &chatLogList[idx]); err2 != nil {
-// 			log.Panicf("!!! Panic occurred : %v", err2)
-// 		}
-// 		chatLogList[idx] = models.ChatLog{Chat_Id: chatLogList[idx].Chat_Id, Room: models.Room{Room_Id: chatLogList[idx].Room_Id}, User: models.User{User_Id: chatLogList[idx].User_Id}, Chat_Content: chatLogList[idx].Chat_Content, CreateAt: time.Now()}
-// 	}
-// 	for idx, v := range val1 {
-// 		if err2 := json.Unmarshal(v, &chatStateList[idx]); err2 != nil {
-// 			log.Panicf("!!! Panic occurred : %v", err2)
-// 		}
-// 		chatStateList[idx] = models.ChatState{Chat_Id: chatLogList[idx].Chat_Id, Chat_State: chatStateList[idx].Chat_State, CreateAt: time.Now()}
-// 	}
-// 	getChatNewStateList(id, &chatStateList)
-
-// 	return &ChatListModel{ChatLogList: chatLogList, ChatStateList: chatStateList},nil
-// }
-
-func getChatLogModelList(roomId int, memberId int) ([]models.ChatLogModel, error) {
+func (service *service) getChatLogModelList(roomId int, memberId int) ([]models.ChatLogModel, error) {
 
 	var member models.MemberState
 	var chatLogList []models.ChatLog
-	redisConn := redisPool.Get()
 	log.Print("getChatLogModelList 시작")
 
-	if err := db.Connector.Where("member_id = ? and member_state = ?", memberId, 1).Last(&member).Error; err != nil {
+	if err := service.repository.GetMemberState(member, memberId); err != nil {
 		return nil, err
 	}
 	log.Print("getChatLogModelList RDM 셀렉 끝 ::: ", member.Member_Last_Read_Msg_Index)
 
-	val1, err := redis.Strings(redisConn.Do("LRANGE", roomId, member.Member_Last_Read_Msg_Index, -1))
+	val1, err := service.repository.GetChatLogList(string(roomId), int(member.Member_Last_Read_Msg_Index))
 	if err != nil {
 		return nil, err
 	}
 	for _, v := range val1 {
 		var chatTemp models.ChatLog
 		log.Print(v, " 조회 시작")
-		val2, err := redis.Bytes(redisConn.Do("GET", "\""+v+"\""))
+		val2, err := service.repository.GetChatLogData(v)
 		if err != nil {
 			return nil, err
 		}
@@ -308,29 +272,7 @@ func getChatLogModelList(roomId int, memberId int) ([]models.ChatLogModel, error
 	return chatLogModelList, nil
 }
 
-// func getChatNewStateList(id string, chatStateList *[]models.ChatState) {
-// 	redisConn, err := redisPool.DialContext(backGroundCtx)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	val2, err2 := redis.ByteSlices(redisConn.Do("LRANGE", id+"_state", 0, -1))
-// 	log.Print("result : ", len(val2))
-// 	if err2 != nil {
-// 		panic(err2)
-// 	}
-// 	chatStateNewList := make([]models.ChatState, len(val2))
-
-// 	for idx, v := range val2 {
-// 		if err2 := json.Unmarshal(v, &chatStateNewList[idx]); err2 != nil {
-// 			log.Panicf("!!! Panic occurred : %v", err2)
-// 		}
-// 		log.Print((*chatStateList)[idx].Chat_Id)
-// 		*chatStateList = append(*chatStateList, chatStateNewList[idx])
-// 	}
-
-// }
-
-func (service *service) whenMsgStateDelete(pubData *models.PublishData, redisConn redis.Conn, id string, d []byte) utils.ErrorStateType {
+func (service *service) whenMsgStateDelete(pubData *models.PublishData, id string, d []byte) error {
 	/// 삭제 요청 pub인지 검사한다. 삭제 요청은 state리스트에만 넣는다.
 
 	/// 업데이트시 기존 chatlog의 index 값저장을 위해 들고 온다.
@@ -339,10 +281,18 @@ func (service *service) whenMsgStateDelete(pubData *models.PublishData, redisCon
 	var oldPubData models.PublishData
 
 	val1, err := service.repository.GetChatLogData(pubData.Chat_Id)
+	if err != nil {
+		return &utils.CommonError{Func: "whenMsgStateDelete", Data: "", Err: err}
+	}
+
+	if err := json.Unmarshal(val1, &oldPubData); err != nil {
+		log.Print("에러발생 1 : ", err)
+		return &utils.CommonError{Func: "whenMsgStateDelete", Data: "", Err: err}
+	}
 
 	if err2 := json.Unmarshal(val1, &oldPubData); err2 != nil {
 		log.Print("에러발생 2 : ", err2)
-		return utils.Unmarshaling_Error
+		return &utils.CommonError{Func: "whenMsgStateDelete", Data: "", Err: err2}
 	}
 
 	/// 신규 chatlog 구조에 추가해준다.
@@ -351,36 +301,30 @@ func (service *service) whenMsgStateDelete(pubData *models.PublishData, redisCon
 	inputData, err := json.Marshal(pubData)
 	if err != nil {
 		log.Print("에러발생 3 : ", err)
-		return utils.Marshal_Error
+		return &utils.CommonError{Func: "whenMsgStateDelete", Data: "", Err: err}
 	}
 
-	/// 채팅 로그 업데이트
-	if _, err := redisConn.Do("SET", pubData.Chat_Id, inputData); err != nil {
+	/// 채팅 로그 업데이트 + 들어온 상태 메시지 전체를 상태 리스트에 추가 (트랜젝션)
+	if err := service.repository.OnDeleteChatLogData(pubData.Chat_Id, inputData,d); err != nil {
 		log.Print("에러발생 4 : ", err)
-		return utils.Redis_Error
-	}
-
-	/// 들어온 상태 메시지 전체를 상태 리스트에 추가
-	if _, err := redisConn.Do("RPUSH", id+"_state", d); err != nil {
-		log.Print("에러발생 5 : ", err)
-		return utils.Redis_Error
+		return &utils.CommonError{Func: "whenMsgStateDelete", Data: "", Err: err}
 	}
 
 	log.Print("1 done")
 
-	return utils.None
+	return nil
 
 }
 
-func whenMsgStateNormal(pubData *PublishData, redisConn redis.Conn, id string) ErrorStateType {
+func (service *service) whenMsgStateNormal(pubData *models.PublishData, id string) error {
 
 	/// 신규 채팅 로그 생성
 	log.Print("2")
 
-	length, err := checkChatListLength(id)
+	length, err := service.checkChatListLength(id)
 	if err != nil {
 		log.Print("에러발생 4 : ", err)
-		return utils.Redis_Error
+		return &utils.CommonError{Func: "whenMsgStateNormal", Data: "", Err: err}
 	}
 	log.Print("2.1")
 	pubData.List_Index = int(*length)
@@ -392,72 +336,32 @@ func whenMsgStateNormal(pubData *PublishData, redisConn redis.Conn, id string) E
 	inputData, err := json.Marshal(pubData)
 	if err != nil {
 		log.Print("에러발생 5 : ", err)
-		return utils.Marshal_Error
+		return &utils.CommonError{Func: "whenMsgStateNormal", Data: "", Err: err}
 
 	}
 	log.Print("2.3")
-	n, err := redisConn.Do("SETNX", "\""+pubData.Chat_Id+"\"", inputData)
-	if err != nil {
+	if err := service.repository.OnCreateChatLogData(id,pubData.Chat_Id, inputData); err != nil {
 		log.Print("에러발생 6 : ", err)
-		return utils.Redis_Error
+		return &utils.CommonError{Func: "whenMsgStateNormal", Data: "", Err: err}
 	}
-
-	log.Print("성공 6 : ", n)
-
-	/// 들어온 채팅의 ID를 룸리스트에 추가
-	n2, err1 := redisConn.Do("RPUSH", id, pubData.Chat_Id)
-	if err1 != nil {
-		log.Print("에러발생 7 : ", err)
-		return utils.Redis_Error
-	}
-	log.Print("성공 7 : ", n2)
+	log.Print("성공 7 : ")
 	log.Print("2 done")
 
 	log.Print("3")
-	return utils.None
+	return nil
 }
 
-func whenMsgStateUserRoomExit(member models.Member) utils.ErrorStateType {
-
-	/// 1) 맴버 새 상태 생성
-	if err := db.Connector.Create(&models.MemberState{Member: member, Member_State: 0, CreateAt: time.Now()}).Error; err != nil {
-		log.Print(err)
-		return utils.Rdb_Error
-	}
-
-	var userList []models.User
-	/// 2) 새 유저 리스트 받음. 이건...의미 있남...?
-	if err := db.Connector.Raw("select * from (select * from chat_server_dev.\"member\" where room_id = ?) as m where m.member_id in (select member_id from chat_server_dev.member_state where member_state_id  in (select max(member_state_id) from chat_server_dev.member_state group by member_id) and member_state = 1);", member.Room_Id).Scan(&userList).Error; err != nil {
-		log.Print(err)
-		return utils.Rdb_Error
-	}
-
-	/// 3) 유저가 아무도 없는 상태인 경우
-	if userList == nil {
-		/// 방 폭파 했다고 상태 생성
-		if err := db.Connector.Create(&models.RoomState{Room: models.Room{Room_Id: member.Room.Room_Id}, Room_State: 0, CreateAt: time.Now()}).Error; err != nil {
-			log.Print("### 에러발생 : RoomState 생성중 ### ")
-			log.Print(err)
-			return utils.Rdb_Error
-		}
-		/// 메시지큐 파괴 [누가 컨슘을 하던, 아직 메시지가 남아 있던]
-		if _, err := RabbitMQChan.QueueDelete(strconv.Itoa(int(member.Room.Room_Id)), false, false, false); err != nil {
-			log.Print("### 에러발생 : QueueDelete중 ###")
-			log.Print(err.Error())
-			return utils.Unexpected_Error
-		}
-	}
-
-	return utils.None
+func (service *service) whenMsgStateUserRoomExit(member models.Member) error {
+	return service.repository.OnDeleteMemberFromRoom(member,*service.channel)
 }
 
-func whenMsgStateUserRoomAdd(userListStr string, roomId int64) utils.ErrorStateType {
-	var userList UserList
+func (service *service) whenMsgStateUserRoomAdd(userListStr string, roomId int64) error {
+	var userList models.UserList
 
 	/// ex : `{"users":"[1,2,3]"}` 이런 데이터를 받기를 고대하고 있다.
 	if err := json.Unmarshal([]byte(userListStr), &userList); err != nil {
 		log.Print(err)
-		return utils.Unmarshaling_Error
+		return &utils.CommonError{Func: "whenMsgStateUserRoomAdd", Data: "", Err: err}
 	}
 
 	/// 맴버 리스트 + 맴버 상태 리스트
@@ -468,50 +372,25 @@ func whenMsgStateUserRoomAdd(userListStr string, roomId int64) utils.ErrorStateT
 	}
 
 	/// 추가될 맴버 생성
-	if err := db.Connector.Create(&memberList).Error; err != nil {
+	if err := service.repository.OnCreateMemberInRoom(memberList,memberStateList); err != nil {
 		log.Print(err)
-		return utils.Rdb_Error
-	}
-	for idx, _ := range userList.UserList {
-
-		memberStateList[idx] = models.MemberState{Member: memberList[idx], Member_State: 1, CreateAt: time.Now()}
-	}
-	/// 추가된 맴버들을 토대로 맴버 상태 생성
-	if err := db.Connector.Create(&memberStateList).Error; err != nil {
-		log.Print(err)
-		return utils.Rdb_Error
+		return &utils.CommonError{Func: "whenMsgStateUserRoomAdd", Data: "", Err: err}
 	}
 
-	return utils.None
+
+	return nil
 }
 
-func PublishThis(c *fiber.Ctx) error {
-
-	var pubData models.PublishData
-
-	if err := json.Unmarshal(c.Body(), &pubData); err != nil {
-		log.Print("데이터 파싱중 에러가 발생했습니다.1", err)
-
-		return c.Status(200).JSON(models.ResultModel{Code: -1, Msg: "데이터 파싱중 에러가 발생했습니다."})
-	}
-	if pubData.ChatState != 2 {
-		pubData.Chat_Id = strconv.Itoa(pubData.RoomId) + "_" + strconv.Itoa(pubData.MemberId) + "_" + time.Now().String()
-	}
-
-	body, err := json.Marshal(pubData)
-	if err != nil {
-		log.Print("데이터 파싱중 에러가 발생했습니다.2", err)
-		return c.Status(200).JSON(models.ResultModel{Code: -1, Msg: "데이터 파싱중 에러가 발생했습니다."})
-	}
-
-	log.Print("PUBDATA : ", pubData.Chat_Id)
-
-	if err := RabbitMQChan.Publish("", strconv.Itoa(pubData.RoomId), false, false, amqp.Publishing{
+func (service *service) PublishMessage(roomId int, body []byte) error {
+	if err := service.channel.Publish("", strconv.Itoa(roomId), false, false, amqp.Publishing{
 		ContentType: "Application/json",
 		Body:        body}); err != nil {
 		log.Print(err)
-		return c.Status(200).JSON(models.ResultModel{Code: -1, Msg: "채팅 전송중 에러 발생"})
+		return &utils.CommonError{Func: "PublishMessage", Data: "", Err: err}
 	}
+	return nil
+}
 
-	return c.Status(200).JSON(models.ResultModel{Code: 1, Msg: "ok", Result: pubData.Chat_Id})
+func consumeLevelError(data string, err error) error {
+	return &utils.CommonError{Func: "consumeAndCount", Data: data, Err: err}
 }

@@ -32,7 +32,7 @@ func NewRepository(conn *gorm.DB) Repository {
 	return &repository{conn: conn}
 }
 
-func (repo *repository) GetRoomListOfUser() ([]models.RoomList, error) {
+func (repo *repository) GetRoomListOfUser(ketInt int) ([]models.RoomList, error) {
 
 	var roomList []models.RoomList
 
@@ -89,10 +89,15 @@ func (repo *repository) CreateRoom(room models.Room, userList models.UserList) (
 		return nil, nil, err
 	}
 
+	if err := tx.Commit().Error; err != nil {
+		tx.Rollback()
+		return nil,nil,err
+	} 
+
 	return &models.RoomResultData{
 		Room:       room,
 		MemberList: memberList,
-	}, userStateList, nil
+	}, userStateList,nil
 
 }
 

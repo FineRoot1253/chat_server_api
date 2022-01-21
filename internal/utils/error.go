@@ -28,3 +28,4 @@ func (e *CommonError) Error() string {
 }
 
 func (e *CommonError) Unwrap() error { return e.Err }
+

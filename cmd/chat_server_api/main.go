@@ -4,9 +4,12 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/JunGeunHong1129/chat_server_api/cmd/chat_server_api/router"
 	"github.com/JunGeunHong1129/chat_server_api/db"
+	"github.com/JunGeunHong1129/chat_server_api/internal/room"
 	"github.com/JunGeunHong1129/chat_server_api/lib"
 	"github.com/JunGeunHong1129/chat_server_api/routes"
+	"github.com/gofiber/fiber/v2"
 	"github.com/streadway/amqp"
 )
 
@@ -14,7 +17,7 @@ func main() {
 
 }
 
-func initDB() {
+func initDB() string {
 	config :=
 		db.Db_Config{
 			Host:     lib.HOST,
@@ -24,17 +27,14 @@ func initDB() {
 			Db:       lib.POSTGRES_DB,
 		}
 
-	connectionString := db.GetConnConfigs(config)
-	err := db.Connect(connectionString)
-	if err != nil {
-		panic(err.Error())
-	}
+	return db.GetConnConfigs(config)
+	
 
 }
 
 func init() {
 	/// postgresql Set
-	initDB()
+	connectionString := initDB()
 
 	/// rabbitmq connection start
 	conn, err := amqp.Dial("amqp://g9bon:reindeer2017!@haproxy_amqp_lb:5672/")
@@ -72,7 +72,22 @@ func init() {
 	log.Print("Starting the HTTP server on port 50000")
 
 	/// fiber setting
-	app := routes.InitaliseHandlers()
+	app := fiber.New()
+	api := app.Group("/chat")
+
+	v1 := api.Group("/v1", func(c *fiber.Ctx) error { // middleware for /api/v1
+		c.Set("Version", "v1")
+		return c.Next()
+	})
+	connnector,err := db.Connect(connectionString)
+	if err != nil {
+		panic(err)
+	}
+	roomRepository := room.NewRepository(connnector)
+	roomService := room.NewService(roomRepository)
+	roomHandler := room.NewHandler()
+	router.SetRoomRouter(v1,)
+	// app := routes.InitaliseHandlers()
 	/// TODO : ExchangeDeclare 선언 필요 위치 FanOut이나 direct
 
 	/// api server start

@@ -11,8 +11,9 @@ import (
 	"github.com/streadway/amqp"
 )
 
-type Service interface{
-	
+type Service interface {
+	CreateQueue(roomId string) error
+	CheckChatListLength(id string) (*int64, error) 
 }
 
 type service struct {
@@ -130,7 +131,7 @@ func (service *service) consumeAndCount(id string) error {
 		}
 
 		/// RDB 저장여부 체크를 위한 조회
-		length, err := service.checkChatListLength(id)
+		length, err := service.CheckChatListLength(id)
 		if err != nil {
 			log.Print("에러발생 6 : ", err)
 			return consumeLevelError("", err)
@@ -218,7 +219,7 @@ func (service *service) consumeAndCount(id string) error {
 	return nil
 }
 
-func (service *service) checkChatListLength(id string) (*int64, error) {
+func (service *service) CheckChatListLength(id string) (*int64, error) {
 	log.Print("2.1.1")
 	log.Print("2.1.1 DONE")
 	log.Print("2.1.2")
@@ -305,7 +306,7 @@ func (service *service) whenMsgStateDelete(pubData *models.PublishData, id strin
 	}
 
 	/// 채팅 로그 업데이트 + 들어온 상태 메시지 전체를 상태 리스트에 추가 (트랜젝션)
-	if err := service.repository.OnDeleteChatLogData(pubData.Chat_Id, inputData,d); err != nil {
+	if err := service.repository.OnDeleteChatLogData(pubData.Chat_Id, inputData, d); err != nil {
 		log.Print("에러발생 4 : ", err)
 		return &utils.CommonError{Func: "whenMsgStateDelete", Data: "", Err: err}
 	}
@@ -321,7 +322,7 @@ func (service *service) whenMsgStateNormal(pubData *models.PublishData, id strin
 	/// 신규 채팅 로그 생성
 	log.Print("2")
 
-	length, err := service.checkChatListLength(id)
+	length, err := service.CheckChatListLength(id)
 	if err != nil {
 		log.Print("에러발생 4 : ", err)
 		return &utils.CommonError{Func: "whenMsgStateNormal", Data: "", Err: err}
@@ -340,7 +341,7 @@ func (service *service) whenMsgStateNormal(pubData *models.PublishData, id strin
 
 	}
 	log.Print("2.3")
-	if err := service.repository.OnCreateChatLogData(id,pubData.Chat_Id, inputData); err != nil {
+	if err := service.repository.OnCreateChatLogData(id, pubData.Chat_Id, inputData); err != nil {
 		log.Print("에러발생 6 : ", err)
 		return &utils.CommonError{Func: "whenMsgStateNormal", Data: "", Err: err}
 	}
@@ -352,7 +353,7 @@ func (service *service) whenMsgStateNormal(pubData *models.PublishData, id strin
 }
 
 func (service *service) whenMsgStateUserRoomExit(member models.Member) error {
-	return service.repository.OnDeleteMemberFromRoom(member,*service.channel)
+	return service.repository.OnDeleteMemberFromRoom(member, *service.channel)
 }
 
 func (service *service) whenMsgStateUserRoomAdd(userListStr string, roomId int64) error {
@@ -372,11 +373,10 @@ func (service *service) whenMsgStateUserRoomAdd(userListStr string, roomId int64
 	}
 
 	/// 추가될 맴버 생성
-	if err := service.repository.OnCreateMemberInRoom(memberList,memberStateList); err != nil {
+	if err := service.repository.OnCreateMemberInRoom(memberList, memberStateList); err != nil {
 		log.Print(err)
 		return &utils.CommonError{Func: "whenMsgStateUserRoomAdd", Data: "", Err: err}
 	}
-
 
 	return nil
 }
@@ -388,6 +388,21 @@ func (service *service) PublishMessage(roomId int, body []byte) error {
 		log.Print(err)
 		return &utils.CommonError{Func: "PublishMessage", Data: "", Err: err}
 	}
+	return nil
+}
+
+func (service *service) CreateQueue(roomId string) error {
+
+	if _, err := service.channel.QueueDeclare(roomId, false, false, false, false, nil); err != nil {
+		log.Print("QueueDeclare phase : " + err.Error())
+		return &utils.CommonError{Func: "CreateQueue", Data: roomId, Err: err}
+	}
+	if err := service.channel.QueueBind(roomId, roomId, "room_exchange", false, nil); err != nil {
+		log.Print("QueueBind phase : " + err.Error())
+		return &utils.CommonError{Func: "CreateQueue", Data: roomId, Err: err}
+	}
+	log.Print("QueueDeclare 완료")
+
 	return nil
 }
 

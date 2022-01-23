@@ -1,7 +1,6 @@
-package routes
+package router
 
 import (
-	"github.com/JunGeunHong1129/chat_server_api/lib"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -21,7 +20,6 @@ func InitaliseHandlers() *fiber.App {
 	v1.Post("/room/create", lib.CreateRoom)
 	v1.Get("/room/findAddableUserList", lib.GetAddableUserList)
 	v1.Post("/room/addMember", lib.AddMemberOnRoom)
-	v1.Post("/room/deleteMember", lib.DeleteMemberInRoom)
 	v1.Get("/room/findRoomListOfUser", lib.GetRoomList)
 	v1.Get("/room/findUserListOfRoom", lib.GetUserListOfRoom)
 	v1.Post("/room/updateLastReadMsgIdx", lib.UpdateLastReadMsgIndex)

@@ -49,6 +49,7 @@ func (h handler) GetRoomListHandler(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(200).JSON(presenter.Failure(err.Error()))
 	}
+	c.Context().Response.Header.Add("Content-Type", "application/json")
 
 	return c.Status(200).JSON(presenter.Success(userList, "ok"))
 
@@ -66,7 +67,7 @@ func (h handler) CreateRoomHandler(c *fiber.Ctx) error {
 	// 1,2,3)은 한 트렌젝션에서 실행되도록 수정할 것
 	// 4,5)는 한 서비스 내에서 123) 실행후 실행되도록 보장 해야함
 	/// tx Start
-	tx := c.Context().UserValue("TX").(*gorm.DB)
+	tx := c.Locals("TX").(*gorm.DB)
 
 	/// parsing
 	var room models.Room
@@ -84,17 +85,20 @@ func (h handler) CreateRoomHandler(c *fiber.Ctx) error {
 	roomId := strconv.Itoa(int(room.Room_Id))
 
 	/// use service
-	roomResultData, userStateList, err := h.roomService.CreateRoom(room, userList)
+	roomResultData, userStateList, err := h.roomService.WithTx(tx).CreateRoom(&room, &userList)
 
 	if err != nil {
+		tx.Rollback()
 		return c.Status(200).JSON(presenter.Failure(err.Error()))
 	}
 
 	if err := h.rabbitmqService.CreateQueue(roomId); err != nil {
+		tx.Rollback()
 		return c.Status(200).JSON(presenter.Failure(err.Error()))
 	}
 
 	if err := h.fcmService.SendMsgAsMultiCast(roomId, userStateList, userList); err != nil {
+		tx.Rollback()
 		return c.Status(200).JSON(presenter.Failure(err.Error()))
 	}
 
@@ -102,6 +106,9 @@ func (h handler) CreateRoomHandler(c *fiber.Ctx) error {
 		tx.Rollback()
 		return c.Status(200).JSON(presenter.Failure(err.Error()))
 	}
+	c.Context().Response.Header.Add("Content-Type", "application/json")
+
+	log.Print("반환 예정 데이터 : ",roomResultData)
 
 	return c.Status(200).JSON(presenter.Success(roomResultData, "ok"))
 
@@ -121,7 +128,7 @@ func (h handler) UpdateLastReadMsgIndexHandler(c *fiber.Ctx) error {
 	body.CreateAt = time.Now()
 
 	/// use service
-	err := h.roomService.GetMember(body, member)
+	err := h.roomService.GetMember(body, &member)
 
 	roomId := strconv.Itoa(int(member.Room_Id))
 
@@ -134,9 +141,10 @@ func (h handler) UpdateLastReadMsgIndexHandler(c *fiber.Ctx) error {
 
 	body.Member_Last_Read_Msg_Index = *currentCount
 
-	if err := h.roomService.CreateMemberState(body); err != nil {
+	if err := h.roomService.CreateMemberState(&body); err != nil {
 		return c.Status(200).JSON(presenter.Failure(err.Error()))
 	}
+	c.Context().Response.Header.Add("Content-Type", "application/json")
 
 	return c.Status(200).JSON(presenter.Success(nil, "ok"))
 
@@ -149,7 +157,7 @@ func (h handler) GetAddableUserListHandler(c *fiber.Ctx) error {
 	var userList []models.User
 
 	/// use service
-	if err := h.roomService.GetAddableUserList(key, userList); err != nil {
+	if err := h.roomService.GetAddableUserList(key, &userList); err != nil {
 		return c.Status(200).JSON(presenter.Failure(err.Error()))
 	}
 
@@ -164,9 +172,10 @@ func (h handler) GetUserListOfRoomHandler(c *fiber.Ctx) error {
 	var userList []models.UserInRoom
 
 	/// use service
-	if err := h.roomService.GetUserListOfRoom(key, userList); err != nil {
+	if err := h.roomService.GetUserListOfRoom(key, &userList); err != nil {
 		return c.Status(200).JSON(presenter.Failure(err.Error()))
 	}
+	c.Context().Response.Header.Add("Content-Type", "application/json")
 
 	return c.Status(200).JSON(presenter.Success(nil, "ok"))
 

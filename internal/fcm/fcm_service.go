@@ -63,7 +63,7 @@ func (service *service) SendMsgAsMultiCast(roomId string, userStateList []models
 
 	for _, v := range userStateList {
 		log.Print("현재 FCM 보낼 유저 : ", v, " ::: OWNER : ", userList.RoomOwner)
-		if v.User_Id != userList.RoomOwner && v.User_FCM_TOKEN != "0" {
+		if v.User_Id != userList.RoomOwner && v.User_FCM_TOKEN != "0" && v.User_FCM_TOKEN != "" {
 			log.Print("FCM 보낼 유저 : ", v.User_Id, " ::: OWNER : ", userList.RoomOwner)
 			tokenList = append(tokenList, v.User_FCM_TOKEN)
 		}
@@ -73,10 +73,12 @@ func (service *service) SendMsgAsMultiCast(roomId string, userStateList []models
 		Data:   map[string]string{"room_id": roomId, "msgType": "0"},
 		Tokens: tokenList,
 	}
-
-	_, err := service.client.SendMulticast(context.Background(), message)
-	if err != nil {
-		return &utils.CommonError{Func: "SendMsg", Data: "", Err: err}
+	if len(tokenList) != 0 {
+		_, err := service.client.SendMulticast(context.Background(), message)
+		if err != nil {
+			log.Print("FCM ", err)
+			return &utils.CommonError{Func: "SendMsg", Data: "", Err: err}
+		}
 	}
 
 	return nil

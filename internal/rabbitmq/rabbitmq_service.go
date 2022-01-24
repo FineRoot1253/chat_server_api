@@ -13,7 +13,9 @@ import (
 
 type Service interface {
 	CreateQueue(roomId string) error
-	CheckChatListLength(id string) (*int64, error) 
+	CheckChatListLength(id string) (*int64, error)
+	GetChatLogModelList(roomId int, memberId int) ([]models.ChatLogModel, error)
+	PublishMessage(roomId int, body []byte) error
 }
 
 type service struct {
@@ -22,18 +24,19 @@ type service struct {
 }
 
 func NewService(repository Repository) (Service, error) {
-	conn, err := amqp.Dial("amqp://g9bon:reindeer2017!@haproxy_amqp_lb:5672/")
+	conn, err := amqp.Dial("amqp://g9bon:reindeer2017!@localhost:5672/")
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
 	ch, err1 := conn.Channel()
 	if err1 != nil {
 		return nil, err
 	}
 
-	defer ch.Close()
 	log.Print("RabbitMQ Channel ready")
+	go func() {
+		<-conn.NotifyClose(make(chan *amqp.Error))
+	}()
 	return &service{
 		channel:    ch,
 		repository: repository,
@@ -234,7 +237,7 @@ func (service *service) CheckChatListLength(id string) (*int64, error) {
 	return res, nil
 }
 
-func (service *service) getChatLogModelList(roomId int, memberId int) ([]models.ChatLogModel, error) {
+func (service *service) GetChatLogModelList(roomId int, memberId int) ([]models.ChatLogModel, error) {
 
 	var member models.MemberState
 	var chatLogList []models.ChatLog
@@ -397,10 +400,10 @@ func (service *service) CreateQueue(roomId string) error {
 		log.Print("QueueDeclare phase : " + err.Error())
 		return &utils.CommonError{Func: "CreateQueue", Data: roomId, Err: err}
 	}
-	if err := service.channel.QueueBind(roomId, roomId, "room_exchange", false, nil); err != nil {
-		log.Print("QueueBind phase : " + err.Error())
-		return &utils.CommonError{Func: "CreateQueue", Data: roomId, Err: err}
-	}
+	// if err := service.channel.QueueBind(roomId, roomId, "room_exchange", false, nil); err != nil {
+	// 	log.Print("QueueBind phase : " + err.Error())
+	// 	return &utils.CommonError{Func: "CreateQueue", Data: roomId, Err: err}
+	// }
 	log.Print("QueueDeclare 완료")
 
 	return nil

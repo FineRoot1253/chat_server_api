@@ -23,7 +23,9 @@ const (
 )
 
 const (
-	HOST          = "postgresql"
+	/// for prod
+	// HOST          = "postgresql"
+	HOST          = "localhost"
 	POSTGRES_PWD  = "reindeer2021"
 	POSTGRES_USER = "postgres"
 	POSTGRES_DB   = "postgres"
@@ -32,9 +34,7 @@ const (
 	REDIS_PORT                 = 25000
 	CHAT_SERVER_PORT           = 50000
 	HAPOXY_PORT                = 1936
-	RABBITMQ_DEFAULT_PASS      = "reindeer2017!"
-	RABBITMQ_DEFAULT_USER      = "g9bon"
-	RABBITMQ_DEFAULT_VHOST     = "chat"
 	PER_SAVE_AMOUNT            = 5
 	FIREBASE_ACCOUNT_FILE_PATH = "../chat-88196-firebase-adminsdk-5es5m-ccf8c2cbfd.json"
 )
+

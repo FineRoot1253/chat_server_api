@@ -1,6 +1,8 @@
 package service
 
-import "fmt"
+import (
+	"fmt"
+)
 
 type Db_Config struct {
 	Host     string
@@ -10,7 +12,7 @@ type Db_Config struct {
 	Db       string
 }
 
-var GetConnConfigs = func(config Db_Config) string {
+func (config Db_Config) GetConnConfigs() string {
 	connConfigs := fmt.Sprintf("host=%s port=%d user=%s dbname=%s sslmode=disable password=%s", config.Host, config.Port, config.User, config.Db, config.Password)
 	return connConfigs
 }

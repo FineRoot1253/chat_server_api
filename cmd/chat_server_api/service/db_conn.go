@@ -22,7 +22,7 @@ func Connect(configStr string) (*gorm.DB, error) {
 			time.Sleep(time.Second * 2)
 
 		}
-		db, err1 := Connector.DB()
+		db, err1 := connecter.DB()
 		if err := db.Ping(); err != nil || err1 != nil {
 			log.Printf("Unable to Ping DB: %s... Retrying\n", err.Error())
 			time.Sleep(time.Second * 2)

@@ -1,19 +1,15 @@
 package router
 
-import "github.com/gofiber/fiber/v2"
+import (
+	"github.com/JunGeunHong1129/chat_server_api/internal/user"
+	"github.com/gofiber/fiber/v2"
+)
 
-func SetUserRouter(app fiber.App, 	 user.Service) {
-
+func SetUserRouter(app fiber.Router, handler user.Handler) {
 	
-	userHandler.
-
-
-	app.Post("/room/create", lib.CreateRoom)
-	app.Get("/room/findAddableUserList", lib.GetAddableUserList)
-	app.Post("/room/addMember", lib.AddMemberOnRoom)
-	app.Post("/room/deleteMember", lib.DeleteMemberInRoom)
-	app.Get("/room/findRoomListOfUser", lib.GetRoomList)
-	app.Get("/room/findUserListOfRoom", lib.GetUserListOfRoom)
-	app.Post("/room/updateLastReadMsgIdx", lib.UpdateLastReadMsgIndex)
+	app.Get("/user/checkEmail", handler.CheckUserEmailDupHandler)
+	app.Post("/user/create", handler.CreateUserHandler)
+	app.Get("/user/login", handler.UserLoginHandler)
+	app.Get("/user/getUserList", handler.GetUserListHandler)
 
 }

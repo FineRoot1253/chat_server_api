@@ -1,15 +1,14 @@
 package router
 
-import "github.com/gofiber/fiber/v2"
+import (
+	"github.com/JunGeunHong1129/chat_server_api/internal/chat_log"
+	"github.com/gofiber/fiber/v2"
+)
 
-func SetLogRouter(app fiber.App) {
+func SetLogRouter(app fiber.Router, chatLogHandler chat_log.Handler ) {
 
-	app.Post("/room/create", lib.CreateRoom)
-	app.Get("/room/findAddableUserList", lib.GetAddableUserList)
-	app.Post("/room/addMember", lib.AddMemberOnRoom)
-	app.Post("/room/deleteMember", lib.DeleteMemberInRoom)
-	app.Get("/room/findRoomListOfUser", lib.GetRoomList)
-	app.Get("/room/findUserListOfRoom", lib.GetUserListOfRoom)
-	app.Post("/room/updateLastReadMsgIdx", lib.UpdateLastReadMsgIndex)
+	app.Post("/log/chatSomeThing", chatLogHandler.PublishMessageHandler)
+	app.Post("/log/restOfMsg", chatLogHandler.GetRestOfMessageHandler)
+	app.Get("/log/unReadMsgCount", chatLogHandler.GetUnReadMsgCountHandler)
 
 }

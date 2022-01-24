@@ -11,8 +11,17 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/JunGeunHong1129/chat_server_api/models"
-	"github.com/JunGeunHong1129/chat_server_api/routes"
+	"github.com/JunGeunHong1129/chat_server_api/cmd/chat_server_api/config"
+	"github.com/JunGeunHong1129/chat_server_api/cmd/chat_server_api/middleware"
+	"github.com/JunGeunHong1129/chat_server_api/cmd/chat_server_api/router"
+	"github.com/JunGeunHong1129/chat_server_api/cmd/chat_server_api/service"
+	"github.com/JunGeunHong1129/chat_server_api/internal/chat_log"
+	"github.com/JunGeunHong1129/chat_server_api/internal/fcm"
+	"github.com/JunGeunHong1129/chat_server_api/internal/models"
+	"github.com/JunGeunHong1129/chat_server_api/internal/rabbitmq"
+	"github.com/JunGeunHong1129/chat_server_api/internal/room"
+	"github.com/JunGeunHong1129/chat_server_api/internal/user"
+	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -36,9 +45,7 @@ var deletedChatLogId string
 
 /// 방 생성 확인
 func TestCreateRoom(t *testing.T) {
-	initFunc()
-	app := routes.InitaliseHandlers()
-
+	app := setAppConfig()
 	tests := []struct {
 		description  string // description of the test case
 		route        string // route path to test
@@ -68,9 +75,11 @@ func TestCreateRoom(t *testing.T) {
 
 		respBody, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
+			log.Print("여기다!0")
 			panic(err)
 		}
 		if err := json.Unmarshal(respBody, &result); err != nil {
+			log.Print("여기다!")
 			panic(err)
 		}
 		resp.Body.Close()
@@ -78,14 +87,19 @@ func TestCreateRoom(t *testing.T) {
 
 		/// Result가 빈터페이스라 지 알아서 map[string]interface{} 됨
 		/// 다시 내 커스텀 구조체에 맞춰주기 위해 이렇게 돌림
+				log.Print("여기다2_1!")
 
 		if isDummyInstanced == false {
+							log.Print("여기다2_2!",result.Result)
+
 			resultByte, err := json.Marshal(result.Result)
 			if err != nil {
+				log.Print("여기다2!")
 				panic(err)
 
 			}
 			if err := json.Unmarshal(resultByte, &createRoomResult); err != nil {
+				log.Print("여기다3!")
 				panic(err)
 			}
 
@@ -105,7 +119,7 @@ func TestCreateRoom(t *testing.T) {
 /// redis 확인
 func TestPublishMsgCheckOneTime(t *testing.T) {
 	// initFunc()
-	app := routes.InitaliseHandlers()
+	app := setAppConfig()
 	tests := []struct {
 		description  string // description of the test case
 		route        string // route path to test
@@ -155,7 +169,7 @@ func TestPublishMsgCheckOneTime(t *testing.T) {
 /// postgresql 저장 확인
 func TestPublishMsgCheck5Times(t *testing.T) {
 	// initFunc()
-	app := routes.InitaliseHandlers()
+	app := setAppConfig()
 	tests := []struct {
 		description  string // description of the test case
 		route        string // route path to test
@@ -225,7 +239,7 @@ func TestPublishMsgCheck5Times(t *testing.T) {
 /// 삭제 후 redis 확인 [id_state, chat_id, chat_id 리스트까지 총 3번]
 func TestPublishRemoveMsgOneTimeUser0(t *testing.T) {
 	// initFunc()
-	app := routes.InitaliseHandlers()
+	app := setAppConfig()
 	log.Print("삭제요청 시작!")
 	tests := []struct {
 		description  string // description of the test case
@@ -276,7 +290,7 @@ func TestPublishRemoveMsgOneTimeUser0(t *testing.T) {
 
 func TestUpdateMemberReadMsgIndex(t *testing.T) {
 	// initFunc()
-	app := routes.InitaliseHandlers()
+	app := setAppConfig()
 	tests := []struct {
 		description  string // description of the test case
 		route        string // route path to test
@@ -328,7 +342,7 @@ func TestUpdateMemberReadMsgIndex(t *testing.T) {
 /// postgresql 저장 확인
 func TestPublishMsgCheck5TimesUser1(t *testing.T) {
 	// initFunc()
-	app := routes.InitaliseHandlers()
+	app := setAppConfig()
 	tests := []struct {
 		description  string // description of the test case
 		route        string // route path to test
@@ -395,7 +409,7 @@ func TestPublishMsgCheck5TimesUser1(t *testing.T) {
 }
 func TestGetRestOfMsgList(t *testing.T) {
 	// initFunc()
-	app := routes.InitaliseHandlers()
+	app := setAppConfig()
 	tests := []struct {
 		description  string // description of the test case
 		route        string // route path to test
@@ -449,5 +463,63 @@ func pubData(dummy DummyModel, chatState int) string {
 func pubDataForDelete(dummy DummyModel, chatState int) string {
 	log.Print("삭제 요청 전 데이터 확인 : ", `{"chat_content":"6","room_id":`+strconv.Itoa(int(dummy.Data.Room_Id))+`,"chat_id":`+deletedChatLogId+`,"user_id":`+strconv.Itoa(int(dummy.UserId))+`,"member_id":`+strconv.Itoa(int(dummy.MemberId))+`,"chat_state":`+strconv.Itoa(int(dummy.MemberId))+`}`)
 	return `{"chat_content":"6","room_id":` + strconv.Itoa(int(dummy.Data.Room_Id)) + `,"chat_id":"` + deletedChatLogId + `","user_id":` + strconv.Itoa(int(dummy.UserId)) + `,"member_id":` + strconv.Itoa(int(dummy.MemberId)) + `,"chat_state":` + strconv.Itoa(int(dummy.MemberId)) + `}`
+
+}
+
+func setAppConfig() *fiber.App {
+	/// fiber setting
+	connectionString := initDB()
+	app := fiber.New()
+	api := app.Group("/chat")
+
+	v1 := api.Group("/v1", func(c *fiber.Ctx) error { // middleware for /api/v1
+		c.Set("Version", "v1")
+		return c.Next()
+	})
+	connnector, err := service.Connect(connectionString)
+	if err != nil {
+		panic(err)
+	}
+	rabbitmqRepository := rabbitmq.NewRepository(connnector)
+	rabbitmqService, err := rabbitmq.NewService(rabbitmqRepository)
+	if err != nil {
+		panic(err)
+	}
+
+	fcmService, err := fcm.NewService()
+	if err != nil {
+		panic(err)
+	}
+
+	roomRepository := room.NewRepository(connnector)
+	roomService := room.NewService(roomRepository)
+	roomHandler := room.NewHandler(roomService, fcmService, rabbitmqService)
+	router.SetRoomRouter(v1, roomHandler, middleware.GetTransactionMiddleWare(connnector))
+
+	userRepository := user.NewRepository(connnector)
+	userService := user.NewService(userRepository)
+	userHandler := user.NewHander(userService)
+	router.SetUserRouter(v1, userHandler)
+
+	chatLogRepository := chat_log.NewRepository(connnector)
+	chatLogService := chat_log.NewService(chatLogRepository)
+	chatLogHandler := chat_log.NewHandler(chatLogService, rabbitmqService)
+	router.SetLogRouter(v1, chatLogHandler)
+
+	return app
+}
+
+func initDB() string {
+	config :=
+		service.Db_Config{
+			Host:     config.HOST,
+			Port:     config.POSTGRES_PORT,
+			User:     config.POSTGRES_USER,
+			Password: config.POSTGRES_PWD,
+			Db:       config.POSTGRES_DB,
+		}
+		log.Print("testsetsetstesetsetseet",config.Host)
+
+	return config.GetConnConfigs()
 
 }

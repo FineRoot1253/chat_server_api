@@ -1,15 +1,15 @@
 package integrestion__tests
 
-import (
-	// "fmt"
-	"log"
+// import (
+// 	// "fmt"
+// 	"log"
 
-	"github.com/JunGeunHong1129/chat_server_api/db"
-	"github.com/JunGeunHong1129/chat_server_api/lib"
+// 	"github.com/JunGeunHong1129/chat_server_api/db"
+// 	"github.com/JunGeunHong1129/chat_server_api/lib"
 
-	// "github.com/JunGeunHong1129/chat_server_api/routes"
-	"github.com/streadway/amqp"
-)
+// 	// "github.com/JunGeunHong1129/chat_server_api/routes"
+// 	"github.com/streadway/amqp"
+// )
 
 /// TODO :
 // import (
@@ -67,65 +67,65 @@ import (
 // os.Exit(m.Run())
 
 // }
-func initDB() {
-	config :=
-		db.Db_Config{
-			Host:     lib.HOST,
-			Port:     lib.POSTGRES_PORT,
-			User:     lib.POSTGRES_USER,
-			Password: lib.POSTGRES_PWD,
-			Db:       lib.POSTGRES_DB,
-		}
+// func initDB() {
+// 	config :=
+// 		db.Db_Config{
+// 			Host:     lib.HOST,
+// 			Port:     lib.POSTGRES_PORT,
+// 			User:     lib.POSTGRES_USER,
+// 			Password: lib.POSTGRES_PWD,
+// 			Db:       lib.POSTGRES_DB,
+// 		}
 
-	connectionString := db.GetConnConfigs(config)
-	err := db.Connect(connectionString)
-	if err != nil {
-		panic(err.Error())
-	}
+// 	connectionString := db.GetConnConfigs(config)
+// 	err := db.Connect(connectionString)
+// 	if err != nil {
+// 		panic(err.Error())
+// 	}
 
-}
+// }
 
-func initFunc() {
+// func initFunc() {
 
-	initDB()
-	/// rabbitmq connection start
-	conn, err := amqp.Dial("amqp://g9bon:reindeer2017!@haproxy_amqp_lb:5672/")
-	if err != nil {
-		log.Fatal(err)
-	}
+// 	initDB()
+// 	/// rabbitmq connection start
+// 	conn, err := amqp.Dial("amqp://g9bon:reindeer2017!@haproxy_amqp_lb:5672/")
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
 
-	// defer conn.Close()
+// 	// defer conn.Close()
 
-	/// rabbitmq channel start
-	ch, err1 := conn.Channel()
-	if err1 != nil {
-		log.Fatal(err1)
-	}
+// 	/// rabbitmq channel start
+// 	ch, err1 := conn.Channel()
+// 	if err1 != nil {
+// 		log.Fatal(err1)
+// 	}
 
-	// defer ch.Close()
-	lib.RabbitMQChan = *ch
+// 	// defer ch.Close()
+// 	lib.RabbitMQChan = *ch
 
-	go func() {
-		<-conn.NotifyClose(make(chan *amqp.Error))
-	}()
+// 	go func() {
+// 		<-conn.NotifyClose(make(chan *amqp.Error))
+// 	}()
 	
-	/// 메시지 큐 생성
-	lib.RabbitMQFirstInit()
+// 	/// 메시지 큐 생성
+// 	lib.RabbitMQFirstInit()
 
-	log.Print("RabbitMQ Channel ready")
+// 	log.Print("RabbitMQ Channel ready")
 
-	log.Print("Redis Connection ready")
+// 	log.Print("Redis Connection ready")
 
-	lib.InitFirebase() 
-	log.Print("Firebase ready")
-	log.Println("Starting the HTTP server on port 50000")
+// 	lib.InitFirebase() 
+// 	log.Print("Firebase ready")
+// 	log.Println("Starting the HTTP server on port 50000")
 
-	// <-quit
-	// app := routes.InitaliseHandlers()
-	// /// TODO : ExchangeDeclare 선언 필요 위치 FanOut이나 direct
+// 	// <-quit
+// 	// app := routes.InitaliseHandlers()
+// 	// /// TODO : ExchangeDeclare 선언 필요 위치 FanOut이나 direct
 
-	// return app
+// 	// return app
 
-	// log.Fatal(app.Listen(fmt.Sprintf(":%v", lib.CHAT_SERVER_PORT)))
+// 	// log.Fatal(app.Listen(fmt.Sprintf(":%v", lib.CHAT_SERVER_PORT)))
 
-}
+// }

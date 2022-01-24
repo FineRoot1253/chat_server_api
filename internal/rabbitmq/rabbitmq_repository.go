@@ -46,7 +46,7 @@ func NewRepository(conn *gorm.DB) Repository {
 		MaxIdle:   80,
 		MaxActive: 12000, // max number of connections
 		Dial: func() (redis.Conn, error) {
-			c, err := redis.Dial("tcp", "redis:25000")
+			c, err := redis.Dial("tcp", "localhost:25000")
 			if err != nil {
 				panic(err.Error())
 			}
@@ -283,7 +283,7 @@ func (repo *repository) OnCreateMemberInRoom(memberList []models.Member, memberS
 	}()
 
 	/// 추가될 맴버 생성
-	if err := tx.Create(&memberList).Error; err != nil {
+	if err := tx.Create(memberList).Error; err != nil {
 		log.Print(err)
 		tx.Rollback()
 		return &utils.CommonError{Func: "OnCreateMemberInRoom", Data: "", Err: err}

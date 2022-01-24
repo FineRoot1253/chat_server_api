@@ -2,7 +2,7 @@ package room
 
 import (
 	"log"
-	
+	"time"
 
 	"github.com/JunGeunHong1129/chat_server_api/internal/models"
 	"github.com/JunGeunHong1129/chat_server_api/internal/utils"
@@ -12,14 +12,14 @@ import (
 type Repository interface {
 	// GetRoomList() ([]models.RoomState, error)
 	GetRoomListOfUser(key int) ([]models.RoomList, error)
-	CreateRoom(room models.Room, userList models.UserList) (*models.RoomResultData, []models.UserState, error)
-	CreateMemberState(body models.MemberState) error
+	CreateRoom(room *models.Room, userList *models.UserList) (*models.RoomResultData, []models.UserState, error)
+	CreateMemberState(body *models.MemberState) error
 
-	GetAddableUserList(key string, userList []models.User) error
-	GetUserListOfRoom(key string, userList []models.UserInRoom) error
+	GetAddableUserList(key string, userList *[]models.User) error
+	GetUserListOfRoom(key string, userList *[]models.UserInRoom) error
 
 	// CreateMember(memberList []models.Member, memberStateList []models.MemberState) (*models.RoomResultData, error)
-	GetMember(member models.Member, memberId int64) error
+	GetMember(member *models.Member, memberId int64) error
 	WithTx(tx *gorm.DB) repository
 	// DeleteMemberInRoom()
 	// UpdateLastReadMsgIndex()
@@ -51,33 +51,37 @@ func (repo repository) GetRoomListOfUser(keyInt int) ([]models.RoomList, error) 
 
 /// 방을 생성합니다.
 /// [service] CreatRoom_1
-func (repo repository) CreateRoom(room models.Room, userList models.UserList) (*models.RoomResultData, []models.UserState, error) {
+func (repo repository) CreateRoom(room *models.Room, userList *models.UserList) (*models.RoomResultData, []models.UserState, error) {
 	/// 현재 스택 프레임에서 panic이 발생 했는지 검사하고 감지시 롤백처리
-	defer func() {
-		if r := recover(); r != nil {
-			repo.conn.Rollback()
-		}
-	}()
 
 	memberList := make([]models.Member, len(userList.UserList))
 	memberStateList := make([]models.MemberState, len(userList.UserList))
 	var userStateList []models.UserState
 
-	if err := repo.conn.Save(&room).Error; err != nil {
+	if err := repo.conn.Save(room).Error; err != nil {
 		log.Print(err)
 		repo.conn.Rollback()
 		return nil, nil, err
 	}
-	if err := repo.conn.Save(&models.RoomState{Room: room, Room_State: 1, CreateAt: room.CreateAt}).Error; err != nil {
+
+	if err := repo.conn.Save(&models.RoomState{Room: *room, Room_State: 1, CreateAt: room.CreateAt}).Error; err != nil {
 		log.Print(err)
 		repo.conn.Rollback()
 		return nil, nil, err
+	}
+
+	for idx, val := range userList.UserList {
+		memberList[idx] = models.Member{Room: *room, User: models.User{User_Id: val}, CreateAt: time.Now()}
 	}
 
 	if err := repo.conn.Create(&memberList).Error; err != nil {
 		log.Print(err)
 		repo.conn.Rollback()
 		return nil, nil, err
+	}
+
+	for i, _ := range memberList {
+		memberStateList[i] = models.MemberState{Member: memberList[i], Member_State: 1, CreateAt: time.Now()}
 	}
 
 	if err := repo.conn.Create(&memberStateList).Error; err != nil {
@@ -92,49 +96,45 @@ func (repo repository) CreateRoom(room models.Room, userList models.UserList) (*
 		return nil, nil, err
 	}
 
-	if err := repo.conn.Commit().Error; err != nil {
-		repo.conn.Rollback()
-		return nil, nil, err
-	}
-
 	return &models.RoomResultData{
-		Room:       room,
+		Room:       *room,
 		MemberList: memberList,
 	}, userStateList, nil
 
 }
 
-func (repo repository) GetMember(member models.Member, memberId int64) error {
-	if err := repo.conn.Where("member_id=?", memberId).Find(&member).Error; err != nil {
+func (repo repository) GetMember(member *models.Member, memberId int64) error {
+	if err := repo.conn.Where("member_id=?", memberId).Find(member).Error; err != nil {
 		log.Print("결과에러에요1 : ", err)
 		return &utils.CommonError{Func: "GetMember", Data: "", Err: err}
 	}
 	return nil
 }
 
-func (repo repository) CreateMemberState(body models.MemberState) error {
-	if err := repo.conn.Create(&body).Error; err != nil {
+func (repo repository) CreateMemberState(body *models.MemberState) error {
+	if err := repo.conn.Create(body).Error; err != nil {
 		log.Print("결과에러에요3 : ", err)
 		return &utils.CommonError{Func: "CreateMemberState", Data: "", Err: err}
 	}
 	return nil
 }
 
-func (repo repository) GetAddableUserList(key string, userList []models.User) error{
-	if err := repo.conn.Raw("select * from (select * from chat_server_dev.user_state where user_state_id  in (select max(user_state_id) from chat_server_dev.user_state group by user_id) and user_state > 0) as us ,(select * from chat_server_dev.\"user\" as u1 where u1.user_id not in (select m.user_id from (select * from chat_server_dev.\"member\" where room_id = ?) as m where m.member_id in (select member_id from chat_server_dev.member_state where member_state_id  in (select max(member_state_id) from chat_server_dev.member_state group by member_id) and member_state = 1))) as u where u.user_id=us.user_id  and us.user_fcm_token != '0' AND us.user_fcm_token != '';", key).Scan(&userList).Error; err != nil {
+func (repo repository) GetAddableUserList(key string, userList *[]models.User) error {
+	if err := repo.conn.Raw("select * from (select * from chat_server_dev.user_state where user_state_id  in (select max(user_state_id) from chat_server_dev.user_state group by user_id) and user_state > 0) as us ,(select * from chat_server_dev.\"user\" as u1 where u1.user_id not in (select m.user_id from (select * from chat_server_dev.\"member\" where room_id = ?) as m where m.member_id in (select member_id from chat_server_dev.member_state where member_state_id  in (select max(member_state_id) from chat_server_dev.member_state group by member_id) and member_state = 1))) as u where u.user_id=us.user_id  and us.user_fcm_token != '0' AND us.user_fcm_token != '';", key).Scan(userList).Error; err != nil {
 		log.Print(err)
 		return &utils.CommonError{Func: "GetAddableUserList", Data: "", Err: err}
 	}
 	return nil
 }
 
-func (repo repository) GetUserListOfRoom(key string, userList []models.UserInRoom) error{
+func (repo repository) GetUserListOfRoom(key string, userList *[]models.UserInRoom) error {
 	if err := repo.conn.Raw("select * from chat_server_dev.\"user\" as u, (select * from (select * from chat_server_dev.\"member\" where room_id = ?) as m where m.member_id in (select member_id from chat_server_dev.member_state where member_state_id  in (select max(member_state_id) from chat_server_dev.member_state group by member_id) and member_state = 1)) as m where u.user_id = m.user_id;", key).Scan(&userList).Error; err != nil {
 		log.Print(err)
 		return &utils.CommonError{Func: "GetUserListOfRoom", Data: "", Err: err}
 	}
 	return nil
 }
+
 // func AddMemberOnRoom(c *fiber.Ctx) error {
 
 // 	var room models.Room

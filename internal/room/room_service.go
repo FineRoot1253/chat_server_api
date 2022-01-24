@@ -5,27 +5,25 @@ import (
 	"time"
 
 	"github.com/JunGeunHong1129/chat_server_api/internal/models"
-	"github.com/streadway/amqp"
 	"gorm.io/gorm"
 )
 
 type Service interface {
 	GetRoomListOfUser(key int) ([]models.RoomList, error)
-	CreateRoom(room models.Room, userList models.UserList) (*models.RoomResultData, []models.UserState, error)
-	GetMember(body models.MemberState, member models.Member) error
-	CreateMemberState(body models.MemberState) error
-	GetAddableUserList(key string, userList []models.User) error
-	GetUserListOfRoom(key string, userList []models.UserInRoom) error
+	CreateRoom(room *models.Room, userList *models.UserList) (*models.RoomResultData, []models.UserState, error)
+	GetMember(body models.MemberState, member *models.Member) error
+	CreateMemberState(body *models.MemberState) error
+	GetAddableUserList(key string, userList *[]models.User) error
+	GetUserListOfRoom(key string, userList *[]models.UserInRoom) error
 	WithTx(tx *gorm.DB) service
 }
 
 type service struct {
 	repository Repository
-	channel    amqp.Channel
 }
 
-func NewService(repo Repository, channel amqp.Channel) Service {
-	return service{repository: repo, channel: channel}
+func NewService(repo Repository) Service {
+	return service{repository: repo}
 }
 
 func (s service) GetRoomListOfUser(key int) ([]models.RoomList, error) {
@@ -35,13 +33,13 @@ func (s service) GetRoomListOfUser(key int) ([]models.RoomList, error) {
 }
 
 
-func (s service) CreateRoom(room models.Room, userList models.UserList) (*models.RoomResultData, []models.UserState, error) {
+func (s service) CreateRoom(room *models.Room, userList *models.UserList) (*models.RoomResultData, []models.UserState, error) {
 	room.CreateAt = time.Now()
 
 	return s.repository.CreateRoom(room, userList)
 }
 
-func (s service) GetMember(body models.MemberState, member models.Member) error {
+func (s service) GetMember(body models.MemberState, member *models.Member) error {
 	if err := s.repository.GetMember(member, body.Member_Id); err != nil {
 		// log.Print(err)
 		log.Print("결과에러에요1 : ", err)
@@ -51,7 +49,7 @@ func (s service) GetMember(body models.MemberState, member models.Member) error 
 	return nil
 }
 
-func (s service) CreateMemberState(body models.MemberState) error {
+func (s service) CreateMemberState(body *models.MemberState) error {
 	if err := s.repository.CreateMemberState(body); err != nil {
 		log.Print("결과에러에요3 : ", err)
 		return err
@@ -59,11 +57,11 @@ func (s service) CreateMemberState(body models.MemberState) error {
 	return nil
 }
 
-func (s service) GetAddableUserList(key string, userList []models.User) error {
+func (s service) GetAddableUserList(key string, userList *[]models.User) error {
 	return s.repository.GetAddableUserList(key,userList)
 }
 
-func (s service) GetUserListOfRoom(key string, userList []models.UserInRoom) error {
+func (s service) GetUserListOfRoom(key string, userList *[]models.UserInRoom) error {
 	return s.repository.GetUserListOfRoom(key,userList)
 }
 

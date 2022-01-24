@@ -59,7 +59,7 @@ func (h handler) CreateRoomHandler(c *fiber.Ctx) error {
 	// 방 생성
 	// 1)  방, 방 상태 생성
 	// 2)  맴버, 맴버 상태 생성
-	// 3)  중복없이 유저 상태 리스트 조회
+	// 3)  중복없이 유저 상태 리스트 조회  
 	// 4)  rabbitmq 로직
 	// 5)  3)에서 조회한 리스트 유저들에게 fcm 전송
 

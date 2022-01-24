@@ -499,7 +499,7 @@ func setAppConfig() *fiber.App {
 	userRepository := user.NewRepository(connnector)
 	userService := user.NewService(userRepository)
 	userHandler := user.NewHander(userService)
-	router.SetUserRouter(v1, userHandler)
+	router.SetUserRouter(v1, userHandler, middleware.GetTransactionMiddleWare(connnector))
 
 	chatLogRepository := chat_log.NewRepository(connnector)
 	chatLogService := chat_log.NewService(chatLogRepository)

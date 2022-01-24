@@ -5,11 +5,14 @@ import (
 	"log"
 
 	"github.com/JunGeunHong1129/chat_server_api/cmd/chat_server_api/config"
+	"github.com/JunGeunHong1129/chat_server_api/cmd/chat_server_api/middleware"
 	"github.com/JunGeunHong1129/chat_server_api/cmd/chat_server_api/router"
 	"github.com/JunGeunHong1129/chat_server_api/cmd/chat_server_api/service"
+	"github.com/JunGeunHong1129/chat_server_api/internal/chat_log"
 	"github.com/JunGeunHong1129/chat_server_api/internal/fcm"
 	"github.com/JunGeunHong1129/chat_server_api/internal/rabbitmq"
 	"github.com/JunGeunHong1129/chat_server_api/internal/room"
+	"github.com/JunGeunHong1129/chat_server_api/internal/user"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -27,7 +30,7 @@ func initDB() string {
 			Db:       config.POSTGRES_DB,
 		}
 
-	return service.GetConnConfigs(config)
+	return config.GetConnConfigs()
 
 }
 
@@ -55,17 +58,25 @@ func init() {
 		panic(err)
 	}
 
-	
-	fcmService,err := fcm.NewService()
+	fcmService, err := fcm.NewService()
 	if err != nil {
 		panic(err)
 	}
 
 	roomRepository := room.NewRepository(connnector)
 	roomService := room.NewService(roomRepository)
-	roomHandler := room.NewHandler(roomService,fcmService,rabbitmqService)
-	router.SetRoomRouter(v1,roomHandler)
-	
+	roomHandler := room.NewHandler(roomService, fcmService, rabbitmqService)
+	router.SetRoomRouter(v1, roomHandler, middleware.GetTransactionMiddleWare(connnector))
+
+	userRepository := user.NewRepository(connnector)
+	userService := user.NewService(userRepository)
+	userHandler := user.NewHander(userService)
+	router.SetUserRouter(v1, userHandler, middleware.GetTransactionMiddleWare(connnector))
+
+	chatLogRepository := chat_log.NewRepository(connnector)
+	chatLogService := chat_log.NewService(chatLogRepository)
+	chatLogHandler := chat_log.NewHandler(chatLogService, rabbitmqService)
+	router.SetLogRouter(v1, chatLogHandler)
 	// app := routes.InitaliseHandlers()
 	/// TODO : ExchangeDeclare 선언 필요 위치 FanOut이나 direct
 

@@ -10,22 +10,13 @@ import (
 )
 
 type Repository interface {
-	// GetRoomList() ([]models.RoomState, error)
 	GetRoomListOfUser(key int) ([]models.RoomList, error)
 	CreateRoom(room *models.Room, userList *models.UserList) (*models.RoomResultData, []models.UserState, error)
 	CreateMemberState(body *models.MemberState) error
-
 	GetAddableUserList(key string, userList *[]models.User) error
 	GetUserListOfRoom(key string, userList *[]models.UserInRoom) error
-
-	// CreateMember(memberList []models.Member, memberStateList []models.MemberState) (*models.RoomResultData, error)
 	GetMember(member *models.Member, memberId int64) error
 	WithTx(tx *gorm.DB) repository
-	// DeleteMemberInRoom()
-	// UpdateLastReadMsgIndex()
-	// AddMemberOnRoom()
-	// GetAddableUserList()
-	// GetUserListOfRoom()
 }
 
 type repository struct {

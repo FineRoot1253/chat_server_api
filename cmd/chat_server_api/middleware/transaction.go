@@ -29,16 +29,6 @@ func GetTransactionMiddleWare(db *gorm.DB) fiber.Handler{
 		
 		c.Next()
 
-		// if StatusInList(c.Context().Response.StatusCode(), []int{http.StatusOK, http.StatusCreated}) {
-		// 	log.Print("committing transactions")
-		// 	if err := tx.Commit().Error; err != nil {
-		// 		log.Print("trx commit error: ", err)
-		// 	}
-		// } else {
-		// 	log.Print("rolling back transaction due to status code: ", c.Context().Response.StatusCode())
-		// 	tx.Rollback()
-		// }
-
 		return nil
 	}
 }

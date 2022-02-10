@@ -12,3 +12,8 @@
 
 ## 22_01_19
 ### 22_01_19 아키텍쳐 수정중 커밋
+
+## 22_02_10
+ ### 22_02_10 생략된 로직 추가
+ - rabbitmq_service.go : private된 메서드 인터페이스에 추가후 public으로 수정
+ - rabbitmq_handler.go : 방생성 이후 생략된 consume 로직 추가

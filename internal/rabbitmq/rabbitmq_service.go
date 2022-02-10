@@ -14,6 +14,7 @@ import (
 type Service interface {
 	CreateQueue(roomId string) error
 	CheckChatListLength(id string) (*int64, error)
+	ConsumeAndCount(id string) error
 	GetChatLogModelList(roomId int, memberId int) ([]models.ChatLogModel, error)
 	PublishMessage(roomId int, body []byte) error
 }
@@ -59,7 +60,7 @@ func (service *service) RabbitMQFirstInit() error {
 				/// 채팅방 폭파시키든 행위에 대한 리액션 메시지 보내야함
 				return
 			default:
-				errChan <- service.consumeAndCount(id)
+				errChan <- service.ConsumeAndCount(id)
 			}
 		}(strId, errChan)
 
@@ -67,7 +68,7 @@ func (service *service) RabbitMQFirstInit() error {
 	return nil
 }
 
-func (service *service) consumeAndCount(id string) error {
+func (service *service) ConsumeAndCount(id string) error {
 	log.Print("room " + id + ", consume start")
 	msgs, err := service.channel.Consume(id, "", true, false, false, false, nil)
 

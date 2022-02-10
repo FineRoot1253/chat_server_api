@@ -59,7 +59,7 @@ func (h handler) CreateRoomHandler(c *fiber.Ctx) error {
 	// 방 생성
 	// 1)  방, 방 상태 생성
 	// 2)  맴버, 맴버 상태 생성
-	// 3)  중복없이 유저 상태 리스트 조회  
+	// 3)  중복없이 유저 상태 리스트 조회
 	// 4)  rabbitmq 로직
 	// 5)  3)에서 조회한 리스트 유저들에게 fcm 전송
 
@@ -101,6 +101,17 @@ func (h handler) CreateRoomHandler(c *fiber.Ctx) error {
 		tx.Rollback()
 		return c.Status(200).JSON(presenter.Failure(err.Error()))
 	}
+	
+	errChan := make(chan error, 1)
+	go func(id string, errChan chan error) {
+		select {
+		case <-errChan:
+			/// 채팅방 폭파시키든 행위에 대한 리액션 메시지 보내야함
+			return
+		default:
+			errChan <- h.rabbitmqService.ConsumeAndCount(id)
+		}
+	}(strconv.Itoa(int(room.Room_Id)), errChan)
 
 	if err := tx.Commit().Error; err != nil {
 		tx.Rollback()
@@ -108,7 +119,7 @@ func (h handler) CreateRoomHandler(c *fiber.Ctx) error {
 	}
 	c.Context().Response.Header.Add("Content-Type", "application/json")
 
-	log.Print("반환 예정 데이터 : ",roomResultData)
+	log.Print("반환 예정 데이터 : ", roomResultData)
 
 	return c.Status(200).JSON(presenter.Success(roomResultData, "ok"))
 

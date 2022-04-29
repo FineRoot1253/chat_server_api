@@ -25,7 +25,7 @@ services:
       retries: 3
 
   slave_rabbitmq_node_1:
-    image: gjhong1129/examples:rmq_amd64_v0.0.11
+    image: gjhong1129/examples:rmq_amd64_v0.0.10
     container_name: slave_rmq_node_1
     hostname: slave_rmq_node_1
     command: rabbitmq-server
@@ -167,8 +167,8 @@ services:
       - postgresql
       - redis
   haproxy:
-    image: gjhong1129/examples:chat_server_haproxy_amd64_v0.0.35
-    container_name: haproxy_v0.0.35
+    image: gjhong1129/examples:chat_server_haproxy_amd64_v0.0.36
+    container_name: haproxy_v0.0.36
     platform: linux/amd64
     user: root
     hostname: haproxy

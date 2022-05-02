@@ -24,6 +24,7 @@ services:
       timeout: 30s
       retries: 3
 
+
   slave_rabbitmq_node_1:
     image: gjhong1129/examples:rmq_amd64_v0.0.10
     container_name: slave_rmq_node_1
@@ -51,6 +52,7 @@ services:
       timeout: 30s
       retries: 3
 
+
   slave_rabbitmq_node_2:
     image: gjhong1129/examples:rmq_amd64_v0.0.10
     container_name: slave_rmq_node_2
@@ -60,7 +62,7 @@ services:
     user: root
     networks:
       - chat_server_network
-    
+
     platform: linux/amd64
     volumes:
       - ./volume/slave_rmq_node_2/data/:/var/lib/rabbitmq/mnesia
@@ -99,6 +101,7 @@ services:
       timeout: 200s
       retries: 5
       # 도커 네트워크 : 컨테이너 네트워크
+
   postgresql:
     image: gjhong1129/examples:chat_server_db_amd64_v0.0.10
     container_name: chat_server_db_v0.0.14
@@ -129,7 +132,6 @@ services:
       retries: 5
     depends_on:
       - haproxy_amqp_load_balancer
-
   redis:
     image: redis:latest
     container_name: chat_server_redis_v0.0.2
@@ -167,8 +169,8 @@ services:
       - postgresql
       - redis
   haproxy:
-    image: gjhong1129/examples:chat_server_haproxy_amd64_v0.0.36
-    container_name: haproxy_v0.0.36
+    image: gjhong1129/examples:chat_server_haproxy_amd64_v0.0.41
+    container_name: haproxy_v0.0.41
     platform: linux/amd64
     user: root
     hostname: haproxy
@@ -181,10 +183,14 @@ services:
     expose:
       - "1936"
     networks:
+      - default
       - chat_server_network
     depends_on:
       - chat_server
 
 networks:
+  default:
+    external:
+      name: go-talk-net
   chat_server_network:
     driver: bridge
